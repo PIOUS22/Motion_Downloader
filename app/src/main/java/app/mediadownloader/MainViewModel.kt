@@ -36,6 +36,7 @@ data class UiState(
     val wifiOnly: Boolean = false,
     val maxParallel: Int = 2,
     val quickPopup: Boolean = true,
+    val inAppPlayer: Boolean = true,
     val defQuality: Int = 720,
     val defAudio: Boolean = false,
     val defSub: String = "off",
@@ -69,6 +70,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             wifiOnly = AppPrefs.wifiOnly(app),
             maxParallel = AppPrefs.maxParallel(app),
             quickPopup = AppPrefs.popup(app),
+            inAppPlayer = AppPrefs.inAppPlayer(app),
             defQuality = AppPrefs.quality(app),
             defAudio = AppPrefs.audioFormat(app),
             defSub = AppPrefs.subLang(app),
@@ -236,6 +238,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putInt("max_parallel", v).apply()
         _ui.update { it.copy(maxParallel = v) }
         DownloadQueue.pump(ctx)
+    }
+
+    fun setInAppPlayer(v: Boolean) {
+        prefs.edit().putBoolean("in_app_player", v).apply()
+        _ui.update { it.copy(inAppPlayer = v) }
     }
 
     fun setQuickPopup(v: Boolean) {

@@ -101,7 +101,10 @@ class DownloadService : Service() {
                         NotificationChannel(CHANNEL_DONE, "Download finished", NotificationManager.IMPORTANCE_DEFAULT)
                     )
                 }
-                val intent = if (uri != null) {
+                val inApp = uri != null && AppPrefs.inAppPlayer(ctx) && (mime == null || mime.startsWith("video/") || mime.startsWith("audio/"))
+                val intent = if (inApp) {
+                    PlayerActivity.intent(ctx, uri.toString(), text, mime).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                } else if (uri != null) {
                     Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime ?: "*/*")
                         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
                 } else Intent(ctx, MainActivity::class.java)

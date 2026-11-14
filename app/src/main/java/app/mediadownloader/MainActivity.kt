@@ -694,6 +694,11 @@ private fun openDownloaded(ctx: Context, d: DlItem) {
         return
     }
     try {
+        val media = d.mime == null || d.mime.startsWith("video/") || d.mime.startsWith("audio/")
+        if (media && AppPrefs.inAppPlayer(ctx)) {
+            ctx.startActivity(PlayerActivity.intent(ctx, d.uri!!, d.title, d.mime))
+            return
+        }
         ctx.startActivity(
             Intent(Intent.ACTION_VIEW).setDataAndType(uri, d.mime ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         )
@@ -806,6 +811,12 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState) {
                 SettingSwitch(
                     "Quick download pop-up", "Show options when a link is shared to Motion Downloader",
                     s.quickPopup, last = true, onChange = vm::setQuickPopup,
+                )
+            }
+            Group("Playback") {
+                SettingSwitch(
+                    "Play in the app player", "Open finished videos and music in Motion Downloader's own player",
+                    s.inAppPlayer, last = true, onChange = vm::setInAppPlayer,
                 )
             }
             Group("Appearance") {
