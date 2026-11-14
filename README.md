@@ -42,4 +42,5 @@ The APK is signed with the debug key; use your own signing config in `app/build.
   with your own private key before publishing anywhere public.
 - **New design** (Home / Downloads / Settings): paste a link on Home, pick Video/Audio, quality and subtitles, then Download. Downloads go into a queue.
 - **Downloads** tab: filters All / Downloading / Pending / Done, Pause and Resume, Cancel, Retry, Play, clear finished. The list is saved on the phone.
+- **Internet drops?** The download is not failed. It shows "Waiting for internet…" and continues from where it stopped when the connection is back.
 - **Settings**: default quality, format and subtitle language; Wi-Fi only; simultaneous downloads (1-3); save location; quick share pop-up on/off; theme; cookies; update the app and yt-dlp.
