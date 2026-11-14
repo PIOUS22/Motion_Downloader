@@ -33,15 +33,16 @@ data class UiState(
     val subLang: String = "en.*",
     val subMode: String = "file",
     val subAuto: Boolean = true,
-    val downloading: Boolean = false,
-    val progress: Float = 0f,          // 0..100
-    val head: String = "",
-    val detail: String = "",
+    val wifiOnly: Boolean = false,
+    val maxParallel: Int = 2,
+    val quickPopup: Boolean = true,
+    val defQuality: Int = 720,
+    val defAudio: Boolean = false,
+    val defSub: String = "off",
     val cookiesName: String? = null,
     val theme: String = "auto",
     val saveLabel: String = "Downloads/MotionDownloader",
     val saveUri: String? = null,
-    val log: List<String> = emptyList(),
     val updating: Boolean = false,
     val loadingEntries: Boolean = false,
     val entriesError: String? = null,
@@ -62,11 +63,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _ui = MutableStateFlow(
         UiState(
-            presetIndex = prefs.getInt("preset", 0).coerceIn(0, PRESETS.size - 1),
-            subsOn = prefs.getBoolean("subs", false),
-            subLang = prefs.getString("sub_lang", "en.*") ?: "en.*",
-            subMode = prefs.getString("sub_mode", "file") ?: "file",
-            subAuto = prefs.getBoolean("sub_auto", true),
+            presetIndex = AppPrefs.defaultPreset(app),
+            subsOn = AppPrefs.subLang(app) != "off",
+            subLang = AppPrefs.subLang(app).takeIf { it != "off" } ?: "en.*",
+            wifiOnly = AppPrefs.wifiOnly(app),
+            maxParallel = AppPrefs.maxParallel(app),
+            quickPopup = AppPrefs.popup(app),
+            defQuality = AppPrefs.quality(app),
+            defAudio = AppPrefs.audioFormat(app),
+            defSub = AppPrefs.subLang(app),
             theme = prefs.getString("theme", "auto") ?: "auto",
             saveUri = prefs.getString("save_uri", null),
             saveLabel = labelFor(prefs.getString("save_uri", null)),
@@ -124,7 +129,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         else Uri.decode(uri).substringAfterLast("tree/").replace(':', '/').ifBlank { "Chosen folder" }
 
     fun updateYtdlp() {
-        if (_ui.value.updating || _ui.value.downloading) return
+        if (_ui.value.updating) return
         _ui.update { it.copy(updating = true, status = "Updating yt-dlp\u2026", statusIsError = false) }
         viewModelScope.launch(Dispatchers.IO) {
             val r = engine.updateYtdlp()
@@ -191,29 +196,56 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(theme = v) }
     }
 
-    fun setPreset(i: Int) {
-        prefs.edit().putInt("preset", i).apply()
-        _ui.update { it.copy(presetIndex = i) }
+    // choices for the link being downloaded (not saved)
+    fun setPreset(i: Int) = _ui.update { it.copy(presetIndex = i) }
+
+    /** Video / Audio switch on the analysis screen. */
+    fun setAudio(audio: Boolean) = _ui.update {
+        if (audio == PRESETS[it.presetIndex].isAudio) it
+        else it.copy(presetIndex = if (audio) 5 else AppPrefs.defaultPreset(ctx).takeIf { i -> !PRESETS[i].isAudio } ?: 2)
     }
 
-    fun setSubsOn(v: Boolean) {
-        prefs.edit().putBoolean("subs", v).apply()
-        _ui.update { it.copy(subsOn = v) }
+    /** null = subtitles off. */
+    fun setSubs(lang: String?) = _ui.update {
+        if (lang == null) it.copy(subsOn = false) else it.copy(subsOn = true, subLang = lang)
     }
 
-    fun setSubLang(v: String) {
-        prefs.edit().putString("sub_lang", v).apply()
-        _ui.update { it.copy(subLang = v) }
+    // ---- Settings screen (saved)
+    fun setDefQuality(v: Int) {
+        prefs.edit().putInt("def_quality", v).apply()
+        _ui.update { it.copy(defQuality = v) }
     }
 
-    fun setSubMode(v: String) {
-        prefs.edit().putString("sub_mode", v).apply()
-        _ui.update { it.copy(subMode = v) }
+    fun setDefAudio(v: Boolean) {
+        prefs.edit().putBoolean("def_audio", v).apply()
+        _ui.update { it.copy(defAudio = v) }
     }
 
-    fun setSubAuto(v: Boolean) {
-        prefs.edit().putBoolean("sub_auto", v).apply()
-        _ui.update { it.copy(subAuto = v) }
+    fun setDefSub(v: String) {
+        prefs.edit().putString("def_sub", v).apply()
+        _ui.update { it.copy(defSub = v) }
+    }
+
+    fun setWifiOnly(v: Boolean) {
+        prefs.edit().putBoolean("wifi_only", v).apply()
+        _ui.update { it.copy(wifiOnly = v) }
+        DownloadQueue.pump(ctx)
+    }
+
+    fun setMaxParallel(v: Int) {
+        prefs.edit().putInt("max_parallel", v).apply()
+        _ui.update { it.copy(maxParallel = v) }
+        DownloadQueue.pump(ctx)
+    }
+
+    fun setQuickPopup(v: Boolean) {
+        prefs.edit().putBoolean("popup_on", v).apply()
+        _ui.update { it.copy(quickPopup = v) }
+    }
+
+    fun clearAnalysis() = _ui.update {
+        it.copy(analysis = null, options = emptyList(), selectedOption = null, picked = emptySet(), filter = "",
+            status = "", statusIsError = false)
     }
 
     fun selectOption(key: String) {
@@ -280,7 +312,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun analyze() {
         val s = _ui.value
-        if (s.analyzing || s.downloading || s.updating) return
+        if (s.analyzing || s.updating) return
         val url = Urls.normalize(s.url)
         if (!url.startsWith("http")) {
             _ui.update { it.copy(status = "Please paste a valid link first.", statusIsError = true) }
@@ -293,7 +325,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update {
             it.copy(
                 url = url, analyzing = true, analysis = null, options = emptyList(), selectedOption = null,
-                picked = emptySet(), filter = "", progress = 0f, head = "", detail = "",
+                picked = emptySet(), filter = "",
                 status = "Analyzing link…", statusIsError = false,
             )
         }
@@ -304,7 +336,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _ui.update {
                     it.copy(
                         analyzing = false, analysis = a, options = opts, selectedOption = opts.first().first,
-                        status = "Ready. Choose what to download.", statusIsError = false,
+                        presetIndex = AppPrefs.defaultPreset(ctx),
+                        subsOn = AppPrefs.subLang(ctx) != "off",
+                        subLang = AppPrefs.subLang(ctx).takeIf { l -> l != "off" } ?: "en.*",
+                        status = "", statusIsError = false,
                     )
                 }
                 if (opts.first().first == "pick") loadEntriesIfNeeded()
@@ -316,85 +351,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // --------------------------------------------------------------- download
 
-    fun download() {
+    /** Adds the job to the queue (Pending -> Downloading). Returns true when it was added. */
+    fun download(): Boolean {
         val s = _ui.value
-        val a = s.analysis ?: return
-        if (s.downloading) return
-        val opt = s.selectedOption ?: return
+        val a = s.analysis ?: return false
+        val opt = s.selectedOption ?: return false
         if (opt == "pick" && s.picked.isEmpty()) {
             _ui.update { it.copy(status = "Tick at least one video from the playlist.", statusIsError = true) }
-            return
+            return false
         }
         val isPlaylist = opt != "single"
-        val url = if (isPlaylist) (a.playlistUrl ?: a.url) else a.url
-        val items = if (opt == "pick") s.picked.sorted() else null
-        val subs = if (s.subsOn) SubOpts(s.subLang, s.subMode, s.subAuto) else null
-        val preset = PRESETS[s.presetIndex]
-        val histId = java.util.UUID.randomUUID().toString()
-        History.add(
-            DlItem(histId, if (isPlaylist) (a.playlistTitle ?: a.title) else a.title, a.platform, preset.isAudio,
-                "active", 0f, "", null, null, "", System.currentTimeMillis(), a.thumb, null)
+        val items = if (opt == "pick") s.picked.sorted() else emptyList()
+        val job = newJob(
+            a, s.presetIndex, if (s.subsOn && !PRESETS[s.presetIndex].isAudio) s.subLang else null, s.subMode, s.subAuto, isPlaylist, items,
         )
-
-        _ui.update {
-            it.copy(downloading = true, progress = 0f, head = "Starting…", detail = "",
-                status = "Starting download…", statusIsError = false)
-        }
-        DownloadService.start(ctx)
-
-        val listener = object : DownloadListener {
-            private var lastNotif = 0L
-            override fun progress(percent: Float, headline: String, detail: String) {
-                History.progress(histId, percent, detail)
-                _ui.update { it.copy(progress = percent, head = headline, detail = detail, status = headline) }
-                val now = System.currentTimeMillis()
-                if (now - lastNotif > 1000) {
-                    lastNotif = now
-                    DownloadService.update(ctx, headline, percent.toInt())
-                }
-            }
-
-            override fun log(line: String) {
-                _ui.update { it.copy(log = (it.log + line.trim()).takeLast(60)) }
-            }
-
-            override fun status(text: String) {
-                _ui.update { it.copy(status = text, detail = "") }
-                DownloadService.update(ctx, text, -1)
-            }
-        }
-
-        job = viewModelScope.launch {
-            val res = withContext(Dispatchers.IO) {
-                engine.download(url, preset, isPlaylist, items, subs, cookiePath(), s.saveUri?.let { Uri.parse(it) }, a.platform, listener)
-            }
-            DownloadService.stop(ctx)
-            History.finish(histId, res)
-            val msg = "Done \u2014 ${res.savedCount} file(s) saved to ${res.savedPath}" +
-                if (res.hadErrors) "\n(some items failed and were skipped)" else ""
-            if (!res.cancelled && res.savedCount > 0) {
-                DownloadService.finished(ctx, "Saved to ${res.savedPath}", res.savedUri, res.savedMime)
-            } else if (!res.cancelled) {
-                DownloadService.finished(ctx, "Download failed: ${(res.error ?: "unknown error").take(150)}")
-            }
-            _ui.update { st ->
-                when {
-                    res.cancelled -> st.copy(downloading = false, progress = 0f, head = "", detail = "",
-                        status = "Download cancelled.", statusIsError = false)
-                    res.savedCount == 0 -> st.copy(downloading = false, progress = 0f, head = "", detail = "",
-                        status = res.error ?: "The download failed.", statusIsError = true)
-                    else -> st.copy(downloading = false, progress = 100f, head = "", detail = "",
-                        status = msg, statusIsError = false)
-                }
-            }
-        }
-    }
-
-    fun cancel() {
-        if (_ui.value.downloading) {
-            _ui.update { it.copy(status = "Cancelling…") }
-            viewModelScope.launch(Dispatchers.IO) { engine.cancel() }
-        }
+        DownloadQueue.enqueue(ctx, job)
+        return true
     }
 
     companion object {

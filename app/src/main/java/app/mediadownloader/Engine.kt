@@ -295,18 +295,23 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
         "update failed: ${e.message?.take(120)}"
     }
 
-    fun cancel() {
+    @Volatile
+    private var preserveTmp = false
+
+    /** keepFiles = true is used for Pause: partly downloaded files stay so the download can resume. */
+    fun cancel(keepFiles: Boolean = false) {
+        preserveTmp = keepFiles
         cancelRequested = true
         YoutubeDL.getInstance().destroyProcessById(processId)
     }
 
     fun download(
         url: String, preset: Preset, isPlaylist: Boolean, items: List<Int>?,
-        subs: SubOpts?, cookies: String?, saveTree: Uri?, platform: String, listener: DownloadListener,
+        subs: SubOpts?, cookies: String?, saveTree: Uri?, platform: String, tmpName: String, listener: DownloadListener,
     ): DownloadResult {
         cancelRequested = false
         val base = ctx.getExternalFilesDir(null) ?: ctx.filesDir
-        val tmp = File(base, "dl-${System.currentTimeMillis()}").also { it.mkdirs() }
+        val tmp = File(base, tmpName).also { it.mkdirs() }
 
         // YouTube often answers HTTP 403 for some "player clients". Try several, in order.
         val remote = if (ytdlpVersion() >= "2025.11.12") listOf("--remote-components" to "ejs:github") else emptyList()
@@ -421,7 +426,7 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
         }
 
         if (cancelRequested) {
-            tmp.deleteRecursively()
+            if (!preserveTmp) tmp.deleteRecursively()
             return DownloadResult(0, false, true, null)
         }
 

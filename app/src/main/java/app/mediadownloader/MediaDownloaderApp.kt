@@ -12,11 +12,14 @@ class MediaDownloaderApp : Application() {
     override fun onCreate() {
         super.onCreate()
         History.init(this)
+        DownloadQueue.watchNetwork(this)
         // Remove temporary download folders left behind by cancelled, failed or killed downloads.
         // (A new process means no download is running yet, so this is safe.)
         Thread {
             runCatching {
-                (getExternalFilesDir(null) ?: filesDir).listFiles { f -> f.isDirectory && f.name.startsWith("dl-") }
+                // keep folders of paused downloads so they can resume
+                val keep = DownloadQueue.keepDirNames()
+                (getExternalFilesDir(null) ?: filesDir).listFiles { f -> f.isDirectory && f.name.startsWith("dl-") && f.name !in keep }
                     ?.forEach { it.deleteRecursively() }
                 java.io.File(cacheDir, "updates").deleteRecursively()
             }

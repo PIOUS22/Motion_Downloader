@@ -32,8 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -68,7 +67,8 @@ data class ShareState(
     val loading: Boolean = true,
     val error: String? = null,
     val analysis: Analysis? = null,
-    val selected: Int = 2,            // index into PRESETS: 720p
+    val selected: Int = 2,            // index into PRESETS
+    val subs: String? = null,         // subtitle language code or null
 )
 
 class ShareViewModel(app: Application) : AndroidViewModel(app) {
@@ -93,19 +93,18 @@ class ShareViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun init(ctx: android.content.Context) {
+        val sub = AppPrefs.subLang(ctx)
+        _s.update { it.copy(selected = AppPrefs.defaultPreset(ctx), subs = sub.takeIf { x -> x != "off" }) }
+    }
+
     fun select(i: Int) = _s.update { it.copy(selected = i) }
+
+    fun cycleSubs() = _s.update {
+        val order = listOf<String?>(null, "en.*", "bn.*", "hi.*")
+        it.copy(subs = order[(order.indexOf(it.subs) + 1).mod(order.size)])
+    }
 }
-
-private data class Opt(val preset: Int, val title: String, val music: Boolean)
-
-private val OPTIONS = listOf(
-    Opt(7, "Fast (M4A)", true),
-    Opt(5, "Classic MP3", true),
-    Opt(3, "Fast (480p)", false),
-    Opt(2, "High quality (720p)", false),
-)
-
-private val Yellow = Color(0xFFFFCC20)
 
 class ShareActivity : ComponentActivity() {
     private val vm: ShareViewModel by viewModels()
@@ -122,6 +121,8 @@ class ShareActivity : ComponentActivity() {
             finish()
             return
         }
+        if (!AppPrefs.popup(this)) { openFullApp(); return }
+        vm.init(this)
         vm.start(url)
 
         setContent {
@@ -147,12 +148,16 @@ class ShareActivity : ComponentActivity() {
                 SharePopup(
                     st = st,
                     onSelect = vm::select,
+                    onSubs = vm::cycleSubs,
                     onClose = { finish() },
                     onMore = { openFullApp() },
                     onDownload = {
                         val a = st.analysis ?: return@SharePopup
-                        DownloadService.startDirect(applicationContext, a.url, st.selected, a.platform, a.title, a.thumb)
-                        Toast.makeText(this, "Download started — see the notification", Toast.LENGTH_LONG).show()
+                        DownloadQueue.enqueue(
+                            applicationContext,
+                            newJob(a, st.selected, if (PRESETS[st.selected].isAudio) null else st.subs, "file", true),
+                        )
+                        Toast.makeText(this, "Added to Downloads", Toast.LENGTH_LONG).show()
                         finish()
                     },
                 )
@@ -172,123 +177,118 @@ class ShareActivity : ComponentActivity() {
     }
 }
 
+private val CHIPS = listOf("480p" to 3, "720p" to 2, "1080p" to 1, "MP3" to 5)
+
 @Composable
 private fun SharePopup(
     st: ShareState,
     onSelect: (Int) -> Unit,
+    onSubs: () -> Unit,
     onClose: () -> Unit,
     onMore: () -> Unit,
     onDownload: () -> Unit,
 ) {
-    val none = remember0()
+    val p = LocalPal.current
+    val none = androidx.compose.runtime.remember { MutableInteractionSource() }
     Box(
-        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f))
-            .clickable(interactionSource = none, indication = null) { onClose() },
+        Modifier.fillMaxSize().background(p.scrim).clickable(interactionSource = none, indication = null) { onClose() },
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth().clickable(interactionSource = none, indication = null) { },
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            color = MaterialTheme.colorScheme.surface,
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).background(p.surface)
+                .clickable(interactionSource = none, indication = null) { }
+                .navigationBarsPadding().verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Column(
-                Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(
-                    Modifier.align(Alignment.CenterHorizontally).width(40.dp).height(4.dp)
-                        .clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.outline)
-                )
-                Text("Download", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Box(
+                Modifier.align(Alignment.CenterHorizontally).width(40.dp).height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)).background(p.border)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(p.primary), contentAlignment = Alignment.Center) {
+                    Ico(Ic.Download, 16.dp, Color.White)
+                }
+                Text("Motion Downloader", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (st.analysis != null) Pill("Link analyzed", p.okBg, p.okFg, Ic.Check)
+            }
 
-                val a = st.analysis
-                when {
-                    st.loading -> Row(
-                        Modifier.fillMaxWidth().padding(vertical = 28.dp),
-                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
-                        Spacer(Modifier.width(14.dp))
-                        Text("Analyzing link…")
-                    }
+            val a = st.analysis
+            when {
+                st.loading -> Row(
+                    Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
+                    Spacer(Modifier.width(14.dp))
+                    Text("Analyzing link…")
+                }
 
-                    st.error != null -> {
-                        Text(st.error, color = Color(0xFFE5484D), fontSize = 14.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedButton(onClick = onClose, modifier = Modifier.weight(1f)) { Text("Close") }
-                            OutlinedButton(onClick = onMore, modifier = Modifier.weight(1f)) { Text("Open app") }
-                        }
-                    }
-
-                    a != null -> {
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.width(96.dp).height(54.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black)) {
-                                if (a.thumb != null) {
-                                    AsyncImage(a.thumb, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                }
-                            }
-                            Column(Modifier.weight(1f)) {
-                                Text(a.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                val meta = listOfNotNull(a.platform, fmtDuration(a.duration).takeIf { it.isNotBlank() }).joinToString("  ·  ")
-                                Text(meta, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-
-                        Section("Music")
-                        OPTIONS.filter { it.music }.forEach { OptionRow(it, a, st.selected == it.preset) { onSelect(it.preset) } }
-                        Section("Video")
-                        OPTIONS.filter { !it.music }.forEach { OptionRow(it, a, st.selected == it.preset) { onSelect(it.preset) } }
-
-                        Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outline))
-                        Row(
-                            Modifier.fillMaxWidth().clickable { onMore() }.padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("More formats", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            Text(
-                                if (a.playlistUrl != null) "All · Playlist  ›" else "All  ›",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp,
-                            )
-                        }
-                        Button(
-                            onClick = onDownload,
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Yellow, contentColor = Color.Black),
-                        ) { Text("Download", fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+                st.error != null -> {
+                    Text(st.error, color = p.errFg, fontSize = 14.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        PillButton("Close", p.soft, p.text) { onClose() }
+                        PillButton("Open app", p.tint, p.onTint) { onMore() }
                     }
                 }
-                Spacer(Modifier.height(4.dp))
+
+                a != null -> {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box {
+                            Thumb(a.thumb, 96.dp, 64.dp, 12.dp)
+                            val d = fmtDuration(a.duration)
+                            if (d.isNotEmpty()) Text(
+                                d, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp).clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF14162B)).padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (PRESETS[st.selected].isAudio) "Download this audio?" else "Download this video?",
+                                fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                            )
+                            Text(a.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, color = p.muted)
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Label("Quality")
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CHIPS.forEach { (name, idx) ->
+                                val on = st.selected == idx
+                                Box(
+                                    Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp))
+                                        .background(if (on) p.tint else p.surface)
+                                        .border(1.5.dp, if (on) p.primary else p.border, RoundedCornerShape(22.dp))
+                                        .clickable { onSelect(idx) },
+                                    contentAlignment = Alignment.Center,
+                                ) { Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (on) p.onTint else p.text) }
+                            }
+                        }
+                        val size = estimateSize(a, PRESETS[st.selected])
+                        Muted(PRESETS[st.selected].shortLabel + (size?.let { " · about " + fmtSize(it.first) } ?: ""))
+                    }
+
+                    if (!PRESETS[st.selected].isAudio) Row(
+                        Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(p.soft)
+                            .clickable(onClick = onSubs).padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Subtitles", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text(
+                            when (st.subs) { null -> "Off"; "en.*" -> "English"; "bn.*" -> "Bangla"; "hi.*" -> "Hindi"; else -> st.subs },
+                            fontSize = 14.sp, color = p.muted,
+                        )
+                    }
+
+                    BigButton("Download now", onDownload, Modifier.fillMaxWidth(), icon = Ic.Download)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        TextButton(onClick = onMore) { Text("More options", fontWeight = FontWeight.SemiBold) }
+                        TextButton(onClick = onClose) { Text("Cancel", fontWeight = FontWeight.SemiBold, color = p.muted) }
+                    }
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun remember0() = androidx.compose.runtime.remember { MutableInteractionSource() }
-
-@Composable
-private fun Section(text: String) =
-    Text(text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-@Composable
-private fun OptionRow(o: Opt, a: Analysis, selected: Boolean, onClick: () -> Unit) {
-    val size = estimateSize(a, PRESETS[o.preset])
-    Row(
-        Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier.size(32.dp).border(1.5.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(6.dp)),
-            contentAlignment = Alignment.Center,
-        ) { Text(if (o.music) "♫" else "▶", fontSize = 14.sp) }
-        Spacer(Modifier.width(14.dp))
-        Text(o.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-        if (size != null) {
-            Text(
-                (if (size.second) "" else "≈") + fmtSize(size.first),
-                fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        RadioButton(selected = selected, onClick = onClick)
     }
 }

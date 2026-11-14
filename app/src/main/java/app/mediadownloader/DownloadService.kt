@@ -32,51 +32,7 @@ class DownloadService : Service() {
         } else {
             startForeground(NOTIF_ID, n)
         }
-        val url = intent?.getStringExtra(EXTRA_URL)
-        if (url != null) {
-            val idx = intent.getIntExtra(EXTRA_PRESET, 2).coerceIn(0, PRESETS.size - 1)
-            val platform = intent.getStringExtra(EXTRA_PLATFORM) ?: "Other"
-            val title = intent.getStringExtra(EXTRA_TITLE) ?: url
-            val thumb = intent.getStringExtra(EXTRA_THUMB)
-            val app = applicationContext
-            Thread {
-                try { runDirect(app, url, idx, platform, title, thumb) } finally { stop(app) }
-            }.start()
-        }
         return START_NOT_STICKY
-    }
-
-    /** Download started from the share pop-up (the app UI may not even be open). */
-    private fun runDirect(ctx: Context, url: String, idx: Int, platform: String, title: String, thumb: String?) {
-        val histId = java.util.UUID.randomUUID().toString()
-        History.add(DlItem(histId, title, platform, PRESETS[idx].isAudio, "active", 0f, "", null, null, "",
-            System.currentTimeMillis(), thumb, null))
-        val res = try {
-            Engine.ensureInit(ctx)
-            val prefs = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
-            val cookies = File(ctx.filesDir, "cookies.txt").takeIf { it.exists() }?.absolutePath
-            val tree = prefs.getString("save_uri", null)?.let { Uri.parse(it) }
-            var lastN = 0L
-            Engine(ctx, "md-share-${System.currentTimeMillis()}").download(
-                url, PRESETS[idx], false, null, null, cookies, tree, platform,
-                object : DownloadListener {
-                    override fun progress(percent: Float, headline: String, detail: String) {
-                        val now = System.currentTimeMillis()
-                        History.progress(histId, percent, detail)
-                        if (now - lastN > 1000) { lastN = now; update(ctx, headline, percent.toInt()) }
-                    }
-                    override fun status(text: String) = update(ctx, text, -1)
-                },
-            )
-        } catch (e: Throwable) {
-            DownloadResult(0, false, false, cleanError(e))
-        }
-        History.finish(histId, res)
-        when {
-            res.cancelled -> {}
-            res.savedCount > 0 -> finished(ctx, "Done \u2014 saved to ${res.savedPath}", res.savedUri, res.savedMime)
-            else -> finished(ctx, "Download failed: ${(res.error ?: "unknown error").take(150)}")
-        }
     }
 
     companion object {
@@ -120,15 +76,6 @@ class DownloadService : Service() {
         fun start(ctx: Context) {
             active.incrementAndGet()
             ContextCompat.startForegroundService(ctx, Intent(ctx, DownloadService::class.java))
-        }
-
-        fun startDirect(ctx: Context, url: String, presetIndex: Int, platform: String, title: String, thumb: String?) {
-            active.incrementAndGet()
-            ContextCompat.startForegroundService(
-                ctx,
-                Intent(ctx, DownloadService::class.java).putExtra(EXTRA_URL, url).putExtra(EXTRA_PRESET, presetIndex).putExtra(EXTRA_PLATFORM, platform)
-                    .putExtra(EXTRA_TITLE, title).putExtra(EXTRA_THUMB, thumb),
-            )
         }
 
         fun update(ctx: Context, text: String, percent: Int) {

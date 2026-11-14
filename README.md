@@ -40,4 +40,6 @@ The APK is signed with the debug key; use your own signing config in `app/build.
 - Files are saved to `Downloads/MotionDownloader/<Site>/<Video|Audio>/` (e.g. `.../Facebook/Video`, `.../YouTube/Audio`).
 - The signing key is `app/release.jks` (kept in the repo so new builds can update old installs). Replace it
   with your own private key before publishing anywhere public.
-- **My downloads** tab: shows running downloads (with progress) and finished ones (tap to open, remove, or clear the list). The list is saved on the phone.
+- **New design** (Home / Downloads / Settings): paste a link on Home, pick Video/Audio, quality and subtitles, then Download. Downloads go into a queue.
+- **Downloads** tab: filters All / Downloading / Pending / Done, Pause and Resume, Cancel, Retry, Play, clear finished. The list is saved on the phone.
+- **Settings**: default quality, format and subtitle language; Wi-Fi only; simultaneous downloads (1-3); save location; quick share pop-up on/off; theme; cookies; update the app and yt-dlp.

@@ -52,7 +52,19 @@ val PRESETS = listOf(
     Preset("Audio only - MP3 (320 kbps)", audio = "mp3", quality = "320K"),
     Preset("Audio only - M4A (AAC)", audio = "m4a", quality = "0"),
     Preset("Audio only - original (no conversion)", audio = "best", quality = "0"),
+    Preset("Video up to 2160p (MP4)", height = 2160),
 )
+
+/** Video quality -> index in PRESETS (highest first). */
+val QUALITY_PRESETS = listOf(2160 to 9, 1080 to 1, 720 to 2, 480 to 3, 360 to 4)
+
+val Preset.shortLabel: String
+    get() = when {
+        !isAudio -> (height?.let { "${it}p" } ?: "Best") + " \u00B7 MP4"
+        audio == "mp3" -> "MP3 \u00B7 ${quality?.removeSuffix("K")} kbps"
+        audio == "m4a" -> "M4A \u00B7 AAC"
+        else -> "Audio \u00B7 original"
+    }
 
 val SUB_LANGS = listOf(
     "English" to "en.*", "Bengali (বাংলা)" to "bn.*", "Hindi" to "hi.*",
