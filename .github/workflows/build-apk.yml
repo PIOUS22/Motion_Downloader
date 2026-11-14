@@ -28,18 +28,18 @@ jobs:
         run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Name the APK
-        run: mv app/build/outputs/apk/release/app-release.apk MediaDownloader-1.0.${{ github.run_number }}.apk
+        run: mv app/build/outputs/apk/release/app-release.apk MotionDownloader-1.0.${{ github.run_number }}.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MediaDownloader-apk
-          path: MediaDownloader-*.apk
+          name: MotionDownloader-apk
+          path: MotionDownloader-*.apk
 
       # Installed apps look for the newest release and offer the update.
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Media Downloader 1.0.${{ github.run_number }}
+          name: Motion Downloader 1.0.${{ github.run_number }}
           body: Automatic build ${{ github.run_number }}
-          files: MediaDownloader-*.apk
+          files: MotionDownloader-*.apk
