@@ -18,7 +18,7 @@ android {
         versionCode = runNumber
         versionName = "1.0.$runNumber"
         // GitHub repo that publishes releases (used by the in-app updater). Must be public.
-        buildConfigField("String", "UPDATE_REPO", "\"PIOUS22/Media-Downloader-2.0\"")
+        buildConfigField("String", "UPDATE_REPO", "\"PIOUS22/Motion_Downloader\"")
         // Phones only (arm). Add "x86_64" if you want to run it on an emulator.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
