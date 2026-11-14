@@ -1,11 +1,11 @@
-# Media Downloader for Android
+# Motion Downloader for Android
 
-Phone version of the desktop Media Downloader: paste a link, **Analyze**, pick single video /
+Phone version of the desktop Motion Downloader: paste a link, **Analyze**, pick single video /
 playlist videos / whole playlist, choose MP4 quality or MP3/M4A, optional subtitles, **Download**.
 Powered by yt-dlp + ffmpeg (bundled via the `youtubedl-android` library), UI in Kotlin + Jetpack Compose.
 
-Files are saved to **Downloads/MediaDownloader** by default; use **Save to -> Browse** to pick any folder (playlists get their own sub-folder).
-Use **Share -> Media Downloader** in the YouTube app or a browser: a download pop-up (Music / Video options with sizes) slides up over that app, and the download runs in the background. "More formats" opens the full app (playlists, subtitles, all qualities).
+Files are saved to **Downloads/MotionDownloader** by default; use **Save to -> Browse** to pick any folder (playlists get their own sub-folder).
+Use **Share -> Motion Downloader** in the YouTube app or a browser: a download pop-up (Music / Video options with sizes) slides up over that app, and the download runs in the background. "More formats" opens the full app (playlists, subtitles, all qualities).
 
 Differences from the desktop app
 - "Browser cookies" does not exist on Android -> import a `cookies.txt` file instead (for sign-in / age-restricted videos).
@@ -16,7 +16,7 @@ Differences from the desktop app
 ### A) GitHub Actions (no Android Studio needed)
 1. Create a new GitHub repo and upload everything in this folder (keep the `.github` folder).
 2. Open the **Actions** tab -> *Build APK* -> **Run workflow** (it also runs on every push).
-3. When it finishes (~5 min), open the run and download the **MediaDownloader-apk** artifact -> unzip -> `app-release.apk`.
+3. When it finishes (~5 min), open the run and download the **MotionDownloader-apk** artifact -> unzip -> `app-release.apk`.
 
 ### B) Android Studio
 1. Install Android Studio, choose **Open** and select this folder, let Gradle sync.
@@ -37,6 +37,7 @@ The APK is signed with the debug key; use your own signing config in `app/build.
 - Every GitHub build is versioned `1.0.<run number>` and published as a **Release** with the APK attached.
   The installed app checks the newest release (on launch and twice a day in the background) and shows an
   "Update available" notification plus an in-app **Download & install** button. The repo must be **public**.
-- Files are saved to `Downloads/MediaDownloader/<Site>/<Video|Audio>/` (e.g. `.../Facebook/Video`, `.../YouTube/Audio`).
+- Files are saved to `Downloads/MotionDownloader/<Site>/<Video|Audio>/` (e.g. `.../Facebook/Video`, `.../YouTube/Audio`).
 - The signing key is `app/release.jks` (kept in the repo so new builds can update old installs). Replace it
   with your own private key before publishing anywhere public.
+- **My downloads** tab: shows running downloads (with progress) and finished ones (tap to open, remove, or clear the list). The list is saved on the phone.

@@ -32,7 +32,7 @@ object Updater {
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
             conn.setRequestProperty("Accept", "application/vnd.github+json")
-            conn.setRequestProperty("User-Agent", "MediaDownloader-Android")
+            conn.setRequestProperty("User-Agent", "MotionDownloader-Android")
             if (conn.responseCode == 404) return null          // no release yet (or private repo)
             if (conn.responseCode != 200) throw IllegalStateException("GitHub answered ${conn.responseCode}")
             val j = JSONObject(conn.inputStream.bufferedReader().readText())
@@ -61,7 +61,7 @@ object Updater {
         return false
     }
 
-    private fun apkFile(ctx: Context, version: String) = File(File(ctx.cacheDir, "updates"), "MediaDownloader-$version.apk")
+    private fun apkFile(ctx: Context, version: String) = File(File(ctx.cacheDir, "updates"), "MotionDownloader-$version.apk")
 
     fun downloadedFile(ctx: Context, info: UpdateInfo): File? =
         apkFile(ctx, info.version).takeIf { it.exists() && (info.sizeBytes <= 0 || it.length() == info.sizeBytes) }
@@ -76,7 +76,7 @@ object Updater {
         try {
             conn.connectTimeout = 15000
             conn.readTimeout = 30000
-            conn.setRequestProperty("User-Agent", "MediaDownloader-Android")
+            conn.setRequestProperty("User-Agent", "MotionDownloader-Android")
             val total = conn.contentLengthLong.takeIf { it > 0 } ?: info.sizeBytes
             var done = 0L
             conn.inputStream.use { input ->
@@ -138,7 +138,7 @@ object Updater {
                 NotificationCompat.Builder(ctx, CHANNEL)
                     .setSmallIcon(android.R.drawable.stat_sys_download_done)
                     .setContentTitle("Update available")
-                    .setContentText("Media Downloader ${info.version} is ready. Tap to download and install.")
+                    .setContentText("Motion Downloader ${info.version} is ready. Tap to download and install.")
                     .setContentIntent(open)
                     .setAutoCancel(true)
                     .build()

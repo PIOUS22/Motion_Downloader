@@ -151,7 +151,7 @@ class ShareActivity : ComponentActivity() {
                     onMore = { openFullApp() },
                     onDownload = {
                         val a = st.analysis ?: return@SharePopup
-                        DownloadService.startDirect(applicationContext, a.url, st.selected, a.platform)
+                        DownloadService.startDirect(applicationContext, a.url, st.selected, a.platform, a.title, a.thumb)
                         Toast.makeText(this, "Download started — see the notification", Toast.LENGTH_LONG).show()
                         finish()
                     },

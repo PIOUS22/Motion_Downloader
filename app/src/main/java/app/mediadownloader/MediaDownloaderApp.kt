@@ -11,6 +11,16 @@ import java.util.concurrent.TimeUnit
 class MediaDownloaderApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        History.init(this)
+        // Remove temporary download folders left behind by cancelled, failed or killed downloads.
+        // (A new process means no download is running yet, so this is safe.)
+        Thread {
+            runCatching {
+                (getExternalFilesDir(null) ?: filesDir).listFiles { f -> f.isDirectory && f.name.startsWith("dl-") }
+                    ?.forEach { it.deleteRecursively() }
+                java.io.File(cacheDir, "updates").deleteRecursively()
+            }
+        }.start()
         // Look for a new app version twice a day, even when the app is closed.
         runCatching {
             val req = PeriodicWorkRequestBuilder<UpdateWorker>(12, TimeUnit.HOURS)

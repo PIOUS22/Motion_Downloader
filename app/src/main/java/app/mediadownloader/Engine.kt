@@ -44,7 +44,7 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
 
     companion object {
         const val PROCESS_ID = "md-download"
-        const val SAVE_FOLDER = "MediaDownloader"
+        const val SAVE_FOLDER = "MotionDownloader"
 
         private var inited = false
 
@@ -57,7 +57,7 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
             inited = true
         }
 
-        /** First run after install: create Downloads/MediaDownloader so the folder exists. */
+        /** First run after install: create Downloads/MotionDownloader so the folder exists. */
         @Synchronized
         fun ensureBaseFolder(ctx: Context) {
             val prefs = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -72,7 +72,7 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
                     val uri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                     uri?.let {
                         ctx.contentResolver.openOutputStream(it)?.use { o ->
-                            o.write("Files downloaded with Media Downloader are saved here, in sub-folders by site (YouTube, Facebook...) and type (Video, Audio).\n".toByteArray())
+                            o.write("Files downloaded with Motion Downloader are saved here, in sub-folders by site (YouTube, Facebook...) and type (Video, Audio).\n".toByteArray())
                         }
                     }
                     uri != null
@@ -474,7 +474,7 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
         return SaveOutcome(n, first, firstMime, "${root.name ?: "chosen folder"}/${parts.joinToString("/")}")
     }
 
-    /** Default: Downloads/MediaDownloader/<Platform>/<Video|Audio>/ (playlists get a sub-folder). */
+    /** Default: Downloads/MotionDownloader/<Platform>/<Video|Audio>/ (playlists get a sub-folder). */
     private fun saveAll(tmp: File, saveTree: Uri?, platform: String, isAudio: Boolean): SaveOutcome {
         val skip = listOf(".part", ".ytdl", ".temp", ".tmp")
         val files = tmp.walkTopDown().filter { it.isFile && skip.none { s -> it.name.endsWith(s) } }.toList()

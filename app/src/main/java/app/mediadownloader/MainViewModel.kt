@@ -39,7 +39,7 @@ data class UiState(
     val detail: String = "",
     val cookiesName: String? = null,
     val theme: String = "auto",
-    val saveLabel: String = "Downloads/MediaDownloader",
+    val saveLabel: String = "Downloads/MotionDownloader",
     val saveUri: String? = null,
     val log: List<String> = emptyList(),
     val updating: Boolean = false,
@@ -120,7 +120,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun labelFor(uri: String?): String =
-        if (uri == null) "Downloads/MediaDownloader"
+        if (uri == null) "Downloads/MotionDownloader"
         else Uri.decode(uri).substringAfterLast("tree/").replace(':', '/').ifBlank { "Chosen folder" }
 
     fun updateYtdlp() {
@@ -173,7 +173,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val opened = withContext(Dispatchers.Main) { Updater.install(ctx, f) }
                 _ui.update {
                     it.copy(updateBusy = false, updateProgress = -1f, updateReady = true,
-                        updateMsg = if (opened) null else "Allow \u201CInstall unknown apps\u201D for Media Downloader, come back and press Install again.")
+                        updateMsg = if (opened) null else "Allow \u201CInstall unknown apps\u201D for Motion Downloader, come back and press Install again.")
                 }
             } catch (e: Throwable) {
                 _ui.update { it.copy(updateBusy = false, updateProgress = -1f, updateMsg = "Update download failed: ${e.message?.take(100)}") }
@@ -330,6 +330,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val items = if (opt == "pick") s.picked.sorted() else null
         val subs = if (s.subsOn) SubOpts(s.subLang, s.subMode, s.subAuto) else null
         val preset = PRESETS[s.presetIndex]
+        val histId = java.util.UUID.randomUUID().toString()
+        History.add(
+            DlItem(histId, if (isPlaylist) (a.playlistTitle ?: a.title) else a.title, a.platform, preset.isAudio,
+                "active", 0f, "", null, null, "", System.currentTimeMillis(), a.thumb, null)
+        )
 
         _ui.update {
             it.copy(downloading = true, progress = 0f, head = "Starting…", detail = "",
@@ -340,6 +345,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val listener = object : DownloadListener {
             private var lastNotif = 0L
             override fun progress(percent: Float, headline: String, detail: String) {
+                History.progress(histId, percent, detail)
                 _ui.update { it.copy(progress = percent, head = headline, detail = detail, status = headline) }
                 val now = System.currentTimeMillis()
                 if (now - lastNotif > 1000) {
@@ -363,6 +369,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 engine.download(url, preset, isPlaylist, items, subs, cookiePath(), s.saveUri?.let { Uri.parse(it) }, a.platform, listener)
             }
             DownloadService.stop(ctx)
+            History.finish(histId, res)
             val msg = "Done \u2014 ${res.savedCount} file(s) saved to ${res.savedPath}" +
                 if (res.hadErrors) "\n(some items failed and were skipped)" else ""
             if (!res.cancelled && res.savedCount > 0) {

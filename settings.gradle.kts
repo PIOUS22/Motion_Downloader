@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "MediaDownloader"
+rootProject.name = "MotionDownloader"
 include(":app")

@@ -36,16 +36,21 @@ class DownloadService : Service() {
         if (url != null) {
             val idx = intent.getIntExtra(EXTRA_PRESET, 2).coerceIn(0, PRESETS.size - 1)
             val platform = intent.getStringExtra(EXTRA_PLATFORM) ?: "Other"
+            val title = intent.getStringExtra(EXTRA_TITLE) ?: url
+            val thumb = intent.getStringExtra(EXTRA_THUMB)
             val app = applicationContext
             Thread {
-                try { runDirect(app, url, idx, platform) } finally { stop(app) }
+                try { runDirect(app, url, idx, platform, title, thumb) } finally { stop(app) }
             }.start()
         }
         return START_NOT_STICKY
     }
 
     /** Download started from the share pop-up (the app UI may not even be open). */
-    private fun runDirect(ctx: Context, url: String, idx: Int, platform: String) {
+    private fun runDirect(ctx: Context, url: String, idx: Int, platform: String, title: String, thumb: String?) {
+        val histId = java.util.UUID.randomUUID().toString()
+        History.add(DlItem(histId, title, platform, PRESETS[idx].isAudio, "active", 0f, "", null, null, "",
+            System.currentTimeMillis(), thumb, null))
         val res = try {
             Engine.ensureInit(ctx)
             val prefs = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -57,6 +62,7 @@ class DownloadService : Service() {
                 object : DownloadListener {
                     override fun progress(percent: Float, headline: String, detail: String) {
                         val now = System.currentTimeMillis()
+                        History.progress(histId, percent, detail)
                         if (now - lastN > 1000) { lastN = now; update(ctx, headline, percent.toInt()) }
                     }
                     override fun status(text: String) = update(ctx, text, -1)
@@ -65,6 +71,7 @@ class DownloadService : Service() {
         } catch (e: Throwable) {
             DownloadResult(0, false, false, cleanError(e))
         }
+        History.finish(histId, res)
         when {
             res.cancelled -> {}
             res.savedCount > 0 -> finished(ctx, "Done \u2014 saved to ${res.savedPath}", res.savedUri, res.savedMime)
@@ -78,6 +85,8 @@ class DownloadService : Service() {
         private const val EXTRA_URL = "url"
         private const val EXTRA_PRESET = "preset"
         private const val EXTRA_PLATFORM = "platform"
+        private const val EXTRA_TITLE = "title"
+        private const val EXTRA_THUMB = "thumb"
         private const val CHANNEL_DONE = "done"
         private val active = AtomicInteger(0)
 
@@ -99,7 +108,7 @@ class DownloadService : Service() {
             )
             val b = NotificationCompat.Builder(ctx, CHANNEL)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
-                .setContentTitle("Media Downloader")
+                .setContentTitle("Motion Downloader")
                 .setContentText(text)
                 .setContentIntent(open)
                 .setOngoing(true)
@@ -113,11 +122,12 @@ class DownloadService : Service() {
             ContextCompat.startForegroundService(ctx, Intent(ctx, DownloadService::class.java))
         }
 
-        fun startDirect(ctx: Context, url: String, presetIndex: Int, platform: String) {
+        fun startDirect(ctx: Context, url: String, presetIndex: Int, platform: String, title: String, thumb: String?) {
             active.incrementAndGet()
             ContextCompat.startForegroundService(
                 ctx,
-                Intent(ctx, DownloadService::class.java).putExtra(EXTRA_URL, url).putExtra(EXTRA_PRESET, presetIndex).putExtra(EXTRA_PLATFORM, platform),
+                Intent(ctx, DownloadService::class.java).putExtra(EXTRA_URL, url).putExtra(EXTRA_PRESET, presetIndex).putExtra(EXTRA_PLATFORM, platform)
+                    .putExtra(EXTRA_TITLE, title).putExtra(EXTRA_THUMB, thumb),
             )
         }
 

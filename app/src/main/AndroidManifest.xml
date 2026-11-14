@@ -31,7 +31,7 @@
             </intent-filter>
         </activity>
 
-        <!-- "Share" -> Media Downloader opens this download pop-up over the other app. -->
+        <!-- "Share" -> Motion Downloader opens this download pop-up over the other app. -->
         <activity
             android:name=".ShareActivity"
             android:exported="true"

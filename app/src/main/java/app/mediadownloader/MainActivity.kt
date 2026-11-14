@@ -19,6 +19,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -189,7 +190,7 @@ private fun App(vm: MainViewModel) {
             title = { Text("Permissions") },
             text = {
                 Text(
-                    "Media Downloader needs:\n\n" +
+                    "Motion Downloader needs:\n\n" +
                         "\u2022 Notifications \u2013 to show download progress and app updates\n" +
                         "\u2022 Storage \u2013 to save files (only asked on Android 9 and older)\n" +
                         "\u2022 Install unknown apps \u2013 asked later, only when you install an update"
@@ -217,11 +218,14 @@ private fun App(vm: MainViewModel) {
         if (uri != null) vm.setSaveFolder(uri)
     }
 
+    var tab by remember { mutableStateOf(0) }
+    val hist by History.items.collectAsState()
+
     AppTheme(s.theme) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
-                Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
+                if (tab == 0) Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
                     Row(
                         Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -239,7 +243,7 @@ private fun App(vm: MainViewModel) {
                 }
             },
         ) { pad ->
-            Column(
+            if (tab == 1) DownloadsScreen(pad, hist, tab) { tab = it } else Column(
                 Modifier
                     .fillMaxSize()
                     .padding(pad)
@@ -251,10 +255,11 @@ private fun App(vm: MainViewModel) {
                 // header
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Media Downloader", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        Text("Motion Downloader", fontSize = 22.sp, fontWeight = FontWeight.Bold)
                         Muted("Video & audio from YouTube, Vimeo, SoundCloud, X and 1000+ more sites")
                     }
                 }
+                TabSwitch(tab, hist.count { it.status == "active" }, hist.count { it.status != "active" }) { tab = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Muted("Theme")
                     listOf("Auto" to "auto", "Light" to "light", "Dark" to "dark").forEach { (l, k) ->
@@ -508,5 +513,109 @@ private fun PickPanel(vm: MainViewModel, s: UiState) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TabSwitch(tab: Int, active: Int, finished: Int, onTab: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = tab == 0, onClick = { onTab(0) }, label = { Text("New download") })
+        FilterChip(
+            selected = tab == 1, onClick = { onTab(1) },
+            label = { Text("My downloads" + if (active + finished > 0) " (${active + finished})" else "") },
+        )
+    }
+}
+
+@Composable
+private fun DownloadsScreen(pad: PaddingValues, items: List<DlItem>, tab: Int, onTab: (Int) -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val active = items.filter { it.status == "active" }
+    val finished = items.filter { it.status != "active" }
+    val fmt = remember { java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault()) }
+
+    androidx.compose.foundation.lazy.LazyColumn(
+        Modifier.fillMaxSize().padding(pad).padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(vertical = 12.dp),
+    ) {
+        item {
+            Column {
+                Text("Motion Downloader", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                TabSwitch(tab, active.size, finished.size, onTab)
+            }
+        }
+        if (items.isEmpty()) {
+            item { Muted("Nothing here yet. Downloads you start will appear in this list.") }
+        }
+        if (active.isNotEmpty()) {
+            item { Section("Downloading (${active.size})") }
+            items(active, key = { it.id }) { d ->
+                Card {
+                    DlHeader(d)
+                    LinearProgressIndicator(
+                        progress = { (d.progress / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                    )
+                    Muted(if (d.detail.isNotBlank()) d.detail else "Starting\u2026")
+                }
+            }
+        }
+        if (finished.isNotEmpty()) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { Section("Downloaded (${finished.size})") }
+                    TextButton(onClick = { History.clearFinished() }) { Text("Clear list") }
+                }
+            }
+            items(finished, key = { it.id }) { d ->
+                Card(Modifier.clickable(enabled = d.status == "done") { openDownloaded(ctx, d) }) {
+                    DlHeader(d)
+                    when (d.status) {
+                        "done" -> Muted("${fmt.format(java.util.Date(d.time))}  \u00B7  ${d.path}")
+                        "cancelled" -> Muted("Cancelled")
+                        else -> Text("Failed: ${d.error ?: "unknown error"}", color = ErrorRed, fontSize = 12.sp, maxLines = 3)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (d.status == "done") {
+                            Button(onClick = { openDownloaded(ctx, d) }) { Text("Open") }
+                        }
+                        TextButton(onClick = { History.remove(d.id) }) { Text("Remove from list") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DlHeader(d: DlItem) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(88.dp).height(50.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black)) {
+            if (d.thumb != null) {
+                AsyncImage(d.thumb, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(d.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Muted("${d.platform}  \u00B7  ${if (d.audio) "Audio" else "Video"}")
+        }
+    }
+}
+
+private fun openDownloaded(ctx: Context, d: DlItem) {
+    val uri = d.uri?.let { android.net.Uri.parse(it) }
+    if (uri == null) {
+        android.widget.Toast.makeText(ctx, "File location unknown", android.widget.Toast.LENGTH_SHORT).show()
+        return
+    }
+    try {
+        ctx.startActivity(
+            Intent(Intent.ACTION_VIEW).setDataAndType(uri, d.mime ?: "*/*")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        )
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(ctx, "Cannot open it (file moved or no player app)", android.widget.Toast.LENGTH_SHORT).show()
     }
 }
