@@ -16,12 +16,21 @@ object DownloadQueue {
     private val engines = ConcurrentHashMap<String, Engine>()
     private val userStop = ConcurrentHashMap<String, String>()   // job id -> "pause" | "cancel"
     private val lock = Any()
+    private val netFail = ConcurrentHashMap<String, Long>()       // job id -> time the internet dropped
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private const val RETRY_MS = 15_000L
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
     private fun maxParallel(ctx: Context) = prefs(ctx).getInt("max_parallel", 2).coerceIn(1, 3)
     private fun wifiOnly(ctx: Context) = prefs(ctx).getBoolean("wifi_only", false)
 
     private fun tmpDir(ctx: Context, id: String) = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "dl-$id")
+
+    private fun online(ctx: Context): Boolean {
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
 
     private fun onWifi(ctx: Context): Boolean {
         val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -36,7 +45,10 @@ object DownloadQueue {
             val app = ctx.applicationContext
             val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) = pump(app)
+                override fun onAvailable(network: Network) {
+                    // give the connection a moment to settle, then resume waiting downloads
+                    handler.postDelayed({ pump(app) }, 2500)
+                }
             })
         }
     }
@@ -53,7 +65,18 @@ object DownloadQueue {
             while (true) {
                 val items = History.items.value
                 if (items.count { it.status == "active" } >= maxParallel(app)) return
-                val next = items.lastOrNull { it.status == "pending" } ?: return   // oldest first
+                val now = System.currentTimeMillis()
+                val waiting = items.filter { it.status == "pending" }
+                if (waiting.isEmpty()) return
+                if (!online(app)) {
+                    History.setDetailForPending("Waiting for internet\u2026")
+                    return
+                }
+                val next = waiting.lastOrNull { now - (netFail[it.id] ?: 0L) > RETRY_MS }   // oldest first
+                if (next == null) {   // all of them dropped very recently: try again shortly
+                    handler.postDelayed({ pump(app) }, RETRY_MS)
+                    return
+                }
                 if (wifiOnly(app) && !onWifi(app)) {
                     History.setDetailForPending("Waiting for Wi-Fi")
                     return
@@ -105,6 +128,13 @@ object DownloadQueue {
         }
         engines.remove(id)
         try {
+            if (res.networkLost && userStop[id] == null) {
+                // Internet dropped: keep the partial file and continue automatically when it is back.
+                netFail[id] = System.currentTimeMillis()
+                History.setStatus(id, "pending", "Waiting for internet\u2026")
+                return
+            }
+            netFail.remove(id)
             when (userStop.remove(id)) {
                 "pause" -> History.setStatus(id, "paused", "Paused")
                 "cancel" -> History.finish(id, res.copy(cancelled = true))

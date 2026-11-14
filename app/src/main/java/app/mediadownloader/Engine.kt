@@ -29,6 +29,7 @@ data class DownloadResult(
     val savedUri: Uri? = null,
     val savedMime: String? = null,
     val savedPath: String = "",
+    val networkLost: Boolean = false,   // internet dropped: partial files were kept, try again later
 )
 
 class SaveOutcome(val count: Int, val firstUri: Uri?, val firstMime: String?, val path: String)
@@ -242,8 +243,9 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
         r.addOption("--no-mtime")
         r.addOption("--no-warnings")
         r.addOption("--socket-timeout", 25)
-        r.addOption("--retries", 5)
-        r.addOption("--fragment-retries", 5)
+        r.addOption("--retries", 10)
+        r.addOption("--fragment-retries", 10)
+        r.addOption("--retry-sleep", 3)
         r.addOption("--trim-filenames", 160)
         r.addOption("--embed-metadata")
         if (isPlaylist) {
@@ -430,6 +432,11 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
             return DownloadResult(0, false, true, null)
         }
 
+        // Internet dropped (nothing finished): keep the partial files so the download resumes later.
+        if (error != null && isNetworkError(error) && !hasFinishedMedia(tmp)) {
+            return DownloadResult(0, false, false, error, networkLost = true)
+        }
+
         listener.status("Saving\u2026")
         val saved = runCatching { saveAll(tmp, saveTree, platform, preset.isAudio) }.getOrElse { e ->
             tmp.deleteRecursively()
@@ -441,6 +448,21 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
         return if (saved.count == 0) DownloadResult(0, false, false, error ?: "The download failed.")
         else DownloadResult(saved.count, error != null, false, error, saved.firstUri, saved.firstMime, saved.path)
     }
+
+    private fun isNetworkError(msg: String): Boolean {
+        val m = msg.lowercase()
+        return listOf(
+            "unable to connect", "timed out", "name resolution", "failed to resolve", "getaddrinfo",
+            "network is unreachable", "no route to host", "connection reset", "connection aborted",
+            "connection refused", "incompleteread", "remote end closed", "unable to download", "urlopen error",
+            "transporterror", "temporary failure", "broken pipe", "eof occurred",
+        ).any { it in m } && !m.contains("403") && !m.contains("forbidden") && !m.contains("sign in")
+    }
+
+    /** True when at least one complete (non .part) media file already exists. */
+    private fun hasFinishedMedia(dir: File): Boolean =
+        dir.walkTopDown().any { it.isFile && !it.name.endsWith(".part") && !it.name.endsWith(".ytdl") &&
+            !it.name.endsWith(".temp") && it.extension.lowercase() in setOf("mp4", "m4a", "mp3", "webm", "mkv", "opus", "ogg", "aac") }
 
     // ------------------------------------------------- copy into Downloads/
 
