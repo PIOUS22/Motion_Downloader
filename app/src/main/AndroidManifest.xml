@@ -46,6 +46,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Built-in video / audio player for finished downloads. -->
+        <activity
+            android:name=".PlayerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.MediaDownloader" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
