@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Environment
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -91,12 +92,35 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
     }
 
+    @Volatile
+    private var atTop = true
+
+    /** Called by the page script at every touch start: true when nothing on the page is scrolled down. */
+    private inner class Bridge {
+        @JavascriptInterface
+        fun top(v: Boolean) { atTop = v }
+    }
+
+    private val trackScroll = """
+        (function(){
+          if (window.__mdScroll) return; window.__mdScroll = 1;
+          function chk(t){
+            while (t && t !== document && t.nodeType === 1) { if (t.scrollTop > 0) return false; t = t.parentElement; }
+            var se = document.scrollingElement || document.documentElement;
+            return (se ? se.scrollTop : 0) <= 0 && (window.scrollY || 0) <= 0;
+          }
+          document.addEventListener('touchstart', function(e){ try { MDBridge.top(chk(e.target)); } catch(x){} }, {passive:true, capture:true});
+        })();
+    """.trimIndent()
+
     /** Pull down at the top of a page to reload it. */
     val swipe = androidx.swiperefreshlayout.widget.SwipeRefreshLayout(ctx).apply {
         addView(web, android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
         setColorSchemeColors(0xFF4F46E5.toInt())
         setOnRefreshListener { web.reload() }
-        setOnChildScrollUpCallback { _, _ -> web.scrollY > 0 }
+        setDistanceToTriggerSync((140 * ctx.resources.displayMetrics.density).toInt())
+        // Refresh only when the page really is at the top (also inside pages that scroll in a inner box).
+        setOnChildScrollUpCallback { _, _ -> web.scrollY > 0 || !atTop }
     }
 
     private fun sync(view: WebView?) {
@@ -106,9 +130,12 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
 
     init {
         BrowserHistory.init(ctx)
+        web.addJavascriptInterface(Bridge(), "MDBridge")
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {
                 url = pageUrl ?: url
+                atTop = true
+                view?.evaluateJavascript(trackScroll, null)
                 sync(view)
             }
 
@@ -116,6 +143,7 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
                 url = pageUrl ?: url
                 title = view?.title ?: title
                 swipe.isRefreshing = false
+                view?.evaluateJavascript(trackScroll, null)
                 BrowserHistory.add(pageUrl, view?.title)
                 sync(view)
             }
