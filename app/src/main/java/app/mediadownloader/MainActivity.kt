@@ -164,6 +164,25 @@ private fun App(vm: MainViewModel) {
                 },
             )
         }
+        // "New version available" pop-up
+        val upd = s.appUpdate
+        if (!showPerm && upd != null) {
+            AlertDialog(
+                onDismissRequest = { vm.dismissUpdate() },
+                containerColor = p.surface,
+                title = { Text("New version available") },
+                text = { Text("Motion Downloader v${upd.version} is ready.\nYou have v${BuildConfig.VERSION_NAME}.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        runCatching {
+                            ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/PIOUS22/Motion_Downloader")))
+                        }
+                        vm.dismissUpdate()
+                    }) { Text("Download now", fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = { TextButton(onClick = { vm.dismissUpdate() }) { Text("Cancel") } },
+            )
+        }
         Scaffold(
             containerColor = p.bg,
             bottomBar = {
@@ -680,7 +699,7 @@ private fun DlCard(d: DlItem, fmt: java.text.SimpleDateFormat, ctx: Context) {
             "done" -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { Pill("Downloaded", p.okBg, p.okFg, Ic.Check) }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PillButton("Play", p.primary, Color.White) { openDownloaded(ctx, d) }
+                    PillButton(if (d.mime == null || d.mime.startsWith("video/") || d.mime.startsWith("audio/")) "Play" else "Open", p.primary, Color.White) { openDownloaded(ctx, d) }
                     var menu by remember { mutableStateOf(false) }
                     Box {
                         RoundIconButton(Ic.More, "More options", p.soft, p.text) { menu = true }

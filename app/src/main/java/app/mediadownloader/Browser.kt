@@ -15,6 +15,17 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
+class FileOffer(val url: String, val ua: String?, val mime: String?, val length: Long, val name: String)
+
 /** One WebView that lives as long as the main screen, so the page stays when you switch tabs. */
 @SuppressLint("SetJavaScriptEnabled")
 class BrowserHolder(private val ctx: Context) {
@@ -57,6 +70,8 @@ class BrowserHolder(private val ctx: Context) {
     var progress by mutableIntStateOf(0)
     var canBack by mutableStateOf(false)
     var started by mutableStateOf(false)
+    var hasVideo by mutableStateOf(false)
+    var offer by mutableStateOf<FileOffer?>(null)
 
     val web: WebView = WebView(ctx).apply {
         settings.javaScriptEnabled = true
@@ -96,21 +111,13 @@ class BrowserHolder(private val ctx: Context) {
                 progress = newProgress
             }
         }
-        // Normal file links (pdf, apk, zip, mp4 ...): saved by Android's download manager.
-        web.setDownloadListener { link, userAgent, contentDisposition, mime, _ ->
-            try {
-                val name = URLUtil.guessFileName(link, contentDisposition, mime)
-                val req = DownloadManager.Request(Uri.parse(link)).apply {
-                    setMimeType(mime)
-                    addRequestHeader("User-Agent", userAgent)
-                    CookieManager.getInstance().getCookie(link)?.let { addRequestHeader("Cookie", it) }
-                    setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "MotionDownloader/Files/$name")
-                }
-                (ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
-                Toast.makeText(ctx, "Downloading $name (see notifications)", Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                Toast.makeText(ctx, "Cannot download this file here", Toast.LENGTH_LONG).show()
+        // File links (pdf, apk, zip, mp4 ...): ask first, like a download manager.
+        web.setDownloadListener { link, userAgent, contentDisposition, mime, length ->
+            if (link.startsWith("http://") || link.startsWith("https://")) {
+                val name = URLUtil.guessFileName(link, contentDisposition, mime).replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                offer = FileOffer(link, userAgent, mime, length, name)
+            } else {
+                Toast.makeText(ctx, "This kind of link cannot be downloaded here", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -129,11 +136,18 @@ class BrowserHolder(private val ctx: Context) {
 
     fun showStartPage() {
         started = false
+        hasVideo = false
         url = ""
     }
 
     fun isPage() = started && (url.startsWith("http://") || url.startsWith("https://"))
 }
+
+private val VIDEO_URL = Regex(
+    "youtube\\.com/(watch|shorts|live)|youtu\\.be/|facebook\\.com/(watch|reel|.+/videos/)|fb\\.watch|" +
+        "instagram\\.com/(reel|reels|p|tv)/|tiktok\\.com/.+/video/|vimeo\\.com/\\d+|(twitter|x)\\.com/.+/status/|dailymotion\\.com/video/",
+    RegexOption.IGNORE_CASE,
+)
 
 private val SHORTCUTS = listOf(
     "YouTube" to "https://m.youtube.com",
@@ -155,6 +169,25 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
     LaunchedEffect(b.url) { if (!editing) field = b.url }
     LaunchedEffect(Unit) { b.web.onResume() }
     DisposableEffect(Unit) { onDispose { b.web.onPause() } }
+    // Is a video open on this page? (checked every 1.5 s because many sites change pages without reloading)
+    LaunchedEffect(b.started) {
+        while (b.started) {
+            b.web.evaluateJavascript(
+                "(function(){try{var v=document.querySelector('video');return !!(v&&(v.currentSrc||v.src||v.readyState>0))}catch(e){return false}})()"
+            ) { r -> b.hasVideo = r == "true" || VIDEO_URL.containsMatchIn(b.url) }
+            kotlinx.coroutines.delay(1500)
+        }
+        b.hasVideo = false
+    }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    b.offer?.let { o ->
+        FileOfferDialog(o, onClose = { b.offer = null }) { name, wifi, retry, start ->
+            val cookie = CookieManager.getInstance().getCookie(o.url)
+            DownloadQueue.enqueue(ctx, newFileJob(o.url, name, o.length, o.ua, cookie, wifi, retry), start)
+            Toast.makeText(ctx, if (start) "Download started" else "Added to Downloads (press Resume to start)", Toast.LENGTH_SHORT).show()
+            b.offer = null
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(pad)) {
         Row(
@@ -204,11 +237,13 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            if (b.isPage()) {
-                BigButton(
-                    "Download", { onDownloadPage(b.url) },
-                    Modifier.align(Alignment.BottomEnd).padding(16.dp), icon = Ic.Download,
-                )
+            if (b.isPage() && b.hasVideo) {
+                // small button: only while a video is open
+                Box(
+                    Modifier.align(Alignment.BottomEnd).padding(16.dp).size(52.dp).clip(CircleShape)
+                        .background(p.primary).clickable(role = Role.Button) { onDownloadPage(b.url) },
+                    contentAlignment = Alignment.Center,
+                ) { Ico(Ic.Download, 24.dp, Color.White) }
             }
         }
     }
@@ -216,3 +251,44 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
 
 private fun Modifier.background0(c: androidx.compose.ui.graphics.Color) =
     this.then(Modifier.background(c))
+
+@Composable
+private fun FileOfferDialog(o: FileOffer, onClose: () -> Unit, onSubmit: (String, Boolean, Boolean, Boolean) -> Unit) {
+    val p = LocalPal.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var name by remember { mutableStateOf(o.name) }
+    var wifi by remember { mutableStateOf(AppPrefs.wifiOnly(ctx)) }
+    var retry by remember { mutableStateOf(true) }
+    val where = if (AppPrefs.p(ctx).getString("save_uri", null) != null) "Your chosen folder / Files"
+    else "Downloads/MotionDownloader/Files"
+    val size = if (o.length > 0) "${fmtSize(o.length)} (${o.length} bytes)" else "Unknown"
+    AlertDialog(
+        onDismissRequest = onClose, containerColor = p.surface,
+        title = { Text("Download file!", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Muted("Link")
+                Text(o.url, fontSize = 13.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Muted("Save as")
+                OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text("Size: $size", fontSize = 13.sp, color = p.muted)
+                Muted("Download location:")
+                Text(where, fontSize = 14.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = wifi, onCheckedChange = { wifi = it })
+                    Text("Wi-Fi only", fontSize = 14.sp)
+                    Checkbox(checked = retry, onCheckedChange = { retry = it })
+                    Text("Retry", fontSize = 14.sp)
+                }
+            }
+        },
+        confirmButton = {
+            Row {
+                val n = name.trim().ifEmpty { o.name }
+                TextButton(onClick = { onSubmit(n, wifi, retry, false) }) { Text("ADD") }
+                TextButton(onClick = onClose) { Text("CANCEL") }
+                TextButton(onClick = { onSubmit(n, wifi, retry, true) }) { Text("START", fontWeight = FontWeight.Bold) }
+            }
+        },
+    )
+}

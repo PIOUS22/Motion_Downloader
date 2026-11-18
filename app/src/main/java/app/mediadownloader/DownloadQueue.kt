@@ -16,6 +16,7 @@ object DownloadQueue {
     private val engines = ConcurrentHashMap<String, Engine>()
     private val userStop = ConcurrentHashMap<String, String>()   // job id -> "pause" | "cancel"
     private val lock = Any()
+    private val fileStops = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicBoolean>()
     private val netFail = ConcurrentHashMap<String, Long>()       // job id -> time the internet dropped
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private const val RETRY_MS = 15_000L
@@ -53,9 +54,12 @@ object DownloadQueue {
         }
     }
 
-    fun enqueue(ctx: Context, job: DlItem) {
-        History.add(job.copy(status = "pending"))
-        pump(ctx)
+    /** start = false adds the job as "Paused" (press Resume in Downloads to begin). */
+    fun enqueue(ctx: Context, job: DlItem, start: Boolean = true) {
+        if (start) {
+            History.add(job.copy(status = "pending"))
+            pump(ctx)
+        } else History.add(job.copy(status = "paused", detail = "Added \u2014 press Resume to start"))
     }
 
     /** Starts waiting jobs while there is a free slot. */
@@ -77,7 +81,7 @@ object DownloadQueue {
                     handler.postDelayed({ pump(app) }, RETRY_MS)
                     return
                 }
-                if (wifiOnly(app) && !onWifi(app)) {
+                if ((wifiOnly(app) || next.wifiOnly) && !onWifi(app)) {
                     History.setDetailForPending("Waiting for Wi-Fi")
                     return
                 }
@@ -85,6 +89,76 @@ object DownloadQueue {
                 DownloadService.start(app)
                 Thread { run(app, next) }.start()
             }
+        }
+    }
+
+    /** Direct file download (from the browser) with resume support. */
+    private fun runFile(ctx: Context, item: DlItem, engine: Engine): DownloadResult {
+        val stop = java.util.concurrent.atomic.AtomicBoolean(false)
+        fileStops[item.id] = stop
+        val dir = tmpDir(ctx, item.id).also { it.mkdirs() }
+        val name = item.fileName.ifBlank { "file" }
+        val part = File(dir, "$name.part")
+        try {
+            var have = if (part.exists()) part.length() else 0L
+            val conn = java.net.URL(item.fileUrl).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 20000
+            conn.readTimeout = 30000
+            conn.instanceFollowRedirects = true
+            item.fileUa?.let { conn.setRequestProperty("User-Agent", it) }
+            item.fileCookie?.let { conn.setRequestProperty("Cookie", it) }
+            if (have > 0) conn.setRequestProperty("Range", "bytes=$have-")
+            val code = conn.responseCode
+            if (code != 200 && code != 206) return DownloadResult(0, false, false, "The server answered HTTP $code")
+            if (code == 200 && have > 0) { have = 0; part.delete() }      // server ignored the resume request
+            val total = conn.contentLengthLong.let { if (it > 0) it + have else -1L }
+            var done = have
+            var lastBytes = done
+            var lastT = System.currentTimeMillis()
+            var lastN = 0L
+            conn.inputStream.use { input ->
+                java.io.FileOutputStream(part, have > 0).use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    while (!stop.get()) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        out.write(buf, 0, n)
+                        done += n
+                        val now = System.currentTimeMillis()
+                        if (now - lastT >= 700) {
+                            val speed = (done - lastBytes) * 1000.0 / (now - lastT)
+                            lastBytes = done
+                            lastT = now
+                            val pct = if (total > 0) done * 100f / total else 0f
+                            val eta = if (total > 0 && speed > 1) ((total - done) / speed).toLong() else -1L
+                            val detail = fmtSize(done) + (if (total > 0) " of ${fmtSize(total)}" else "") +
+                                " \u00B7 ${fmtSize(speed.toLong())}/s" + (if (eta >= 0) " \u00B7 ${eta}s left" else "")
+                            History.progress(item.id, minOf(99.9f, pct), detail)
+                            if (now - lastN > 1000) { lastN = now; DownloadService.update(ctx, "Downloading: $name", pct.toInt()) }
+                        }
+                    }
+                }
+            }
+            if (stop.get()) {
+                if (userStop[item.id] != "pause") dir.deleteRecursively()
+                return DownloadResult(0, false, true, null)
+            }
+            if (total > 0 && done < total) return DownloadResult(0, false, false, "Connection lost", networkLost = item.retry)
+            val finalFile = File(dir, name)
+            finalFile.delete()
+            part.renameTo(finalFile)
+            val tree = prefs(ctx).getString("save_uri", null)?.let { Uri.parse(it) }
+            val saved = engine.saveFile(dir, tree)
+            dir.deleteRecursively()
+            return if (saved.count == 0) DownloadResult(0, false, false, "Could not save the file")
+            else DownloadResult(saved.count, false, false, null, saved.firstUri, saved.firstMime, saved.path)
+        } catch (e: java.io.IOException) {
+            if (stop.get()) return DownloadResult(0, false, true, null)
+            return DownloadResult(0, false, false, "Connection problem: ${e.message}", networkLost = item.retry)
+        } catch (e: Throwable) {
+            return DownloadResult(0, false, false, cleanError(e))
+        } finally {
+            fileStops.remove(item.id)
         }
     }
 
@@ -99,6 +173,9 @@ object DownloadQueue {
         engines[id] = engine
         var res: DownloadResult
         try {
+            if (item.fileUrl != null) {
+                res = runFile(ctx, item, engine)
+            } else {
             Engine.ensureInit(ctx)
             val cookies = File(ctx.filesDir, "cookies.txt").takeIf { it.exists() }?.absolutePath
             val tree = prefs(ctx).getString("save_uri", null)?.let { Uri.parse(it) }
@@ -123,6 +200,7 @@ object DownloadQueue {
                     }
                 },
             )
+            }
         } catch (e: Throwable) {
             res = DownloadResult(0, false, false, cleanError(e))
         }
@@ -158,7 +236,7 @@ object DownloadQueue {
         when (it.status) {
             "active" -> {
                 userStop[id] = "pause"
-                Thread { engines[id]?.cancel(keepFiles = true) }.start()
+                Thread { engines[id]?.cancel(keepFiles = true); fileStops[id]?.set(true) }.start()
             }
             "pending" -> History.setStatus(id, "paused", "Paused")
         }
@@ -176,7 +254,7 @@ object DownloadQueue {
         when (it.status) {
             "active" -> {
                 userStop[id] = "cancel"
-                Thread { engines[id]?.cancel(keepFiles = false) }.start()
+                Thread { engines[id]?.cancel(keepFiles = false); fileStops[id]?.set(true) }.start()
             }
             "pending", "paused" -> {
                 tmpDir(ctx, id).deleteRecursively()

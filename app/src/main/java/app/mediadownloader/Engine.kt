@@ -480,6 +480,8 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
         s.replace(Regex("\\s*[\\\\/:*?\"<>|]\\s*"), "-").trim().ifEmpty { "Other" }
 
     /** Saves into a folder the user picked: <picked>/<Platform>/<Video|Audio>/... */
+    fun saveFile(tmp: File, saveTree: Uri?): SaveOutcome = saveAll(tmp, saveTree, "Files", false, flat = true)
+
     private fun saveToTree(tmp: File, files: List<File>, tree: Uri, parts: List<String>): SaveOutcome {
         val root = DocumentFile.fromTreeUri(ctx, tree) ?: throw IllegalStateException("Chosen folder is not available")
         if (!root.canWrite()) throw IllegalStateException("No permission for the chosen folder - pick it again")
@@ -502,19 +504,20 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
     }
 
     /** Default: Downloads/MotionDownloader/<Platform>/<Video|Audio>/ (playlists get a sub-folder). */
-    private fun saveAll(tmp: File, saveTree: Uri?, platform: String, isAudio: Boolean): SaveOutcome {
+    private fun saveAll(tmp: File, saveTree: Uri?, platform: String, isAudio: Boolean, flat: Boolean = false): SaveOutcome {
         val skip = listOf(".part", ".ytdl", ".temp", ".tmp")
         val files = tmp.walkTopDown().filter { it.isFile && skip.none { s -> it.name.endsWith(s) } }.toList()
         val kind = if (isAudio) "Audio" else "Video"
         val plat = folderName(platform)
-        if (saveTree != null) return saveToTree(tmp, files, saveTree, listOf(plat, kind))
+        val parts = if (flat) listOf(plat) else listOf(plat, kind)
+        if (saveTree != null) return saveToTree(tmp, files, saveTree, parts)
 
         var n = 0
         var first: Uri? = null
         var firstMime: String? = null
         for (f in files) {
             val rel = f.relativeTo(tmp).parent
-            val sub = listOfNotNull(SAVE_FOLDER, plat, kind, rel).joinToString("/")
+            val sub = (listOf(SAVE_FOLDER) + parts + listOfNotNull(rel)).joinToString("/")
             val mime = mimeOf(f)
             var uri: Uri? = null
             if (Build.VERSION.SDK_INT >= 29) {
@@ -541,6 +544,6 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
             if (first == null && !f.name.endsWith(".srt")) { first = uri; firstMime = mime }
             n++
         }
-        return SaveOutcome(n, first, firstMime, "Download/$SAVE_FOLDER/$plat/$kind")
+        return SaveOutcome(n, first, firstMime, "Download/$SAVE_FOLDER/" + parts.joinToString("/"))
     }
 }

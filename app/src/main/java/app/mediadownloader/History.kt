@@ -36,6 +36,22 @@ data class DlItem(
     val subsMode: String = "file",
     val subsAuto: Boolean = true,
     val label: String = "",             // e.g. "1080p · MP4"
+    // direct file downloads started from the browser
+    val fileUrl: String? = null,
+    val fileName: String = "",
+    val fileUa: String? = null,
+    val fileCookie: String? = null,
+    val wifiOnly: Boolean = false,
+    val retry: Boolean = true,
+)
+
+fun newFileJob(
+    url: String, name: String, size: Long, ua: String?, cookie: String?, wifiOnly: Boolean, retry: Boolean,
+) = DlItem(
+    id = java.util.UUID.randomUUID().toString(),
+    title = name, platform = "Files", audio = false, status = "pending",
+    url = url, label = (if (size > 0) fmtSize(size) else "File") + " \u00B7 File",
+    fileUrl = url, fileName = name, fileUa = ua, fileCookie = cookie, wifiOnly = wifiOnly, retry = retry,
 )
 
 fun newJob(
@@ -160,6 +176,9 @@ object History {
         put("url", i.url); put("presetIdx", i.presetIdx); put("isPlaylist", i.isPlaylist)
         put("items", JSONArray(i.items)); put("subsLang", i.subsLang ?: JSONObject.NULL)
         put("subsMode", i.subsMode); put("subsAuto", i.subsAuto); put("label", i.label)
+        put("fileUrl", i.fileUrl ?: JSONObject.NULL); put("fileName", i.fileName)
+        put("fileUa", i.fileUa ?: JSONObject.NULL); put("fileCookie", i.fileCookie ?: JSONObject.NULL)
+        put("wifiOnly", i.wifiOnly); put("retry", i.retry)
     }
 
     private fun fromJson(o: JSONObject): DlItem {
@@ -179,6 +198,11 @@ object History {
             subsLang = if (o.isNull("subsLang")) null else o.optString("subsLang"),
             subsMode = o.optString("subsMode", "file"), subsAuto = o.optBoolean("subsAuto", true),
             label = o.optString("label"),
+            fileUrl = if (o.isNull("fileUrl")) null else o.optString("fileUrl"),
+            fileName = o.optString("fileName"),
+            fileUa = if (o.isNull("fileUa")) null else o.optString("fileUa"),
+            fileCookie = if (o.isNull("fileCookie")) null else o.optString("fileCookie"),
+            wifiOnly = o.optBoolean("wifiOnly"), retry = o.optBoolean("retry", true),
         )
     }
 }
