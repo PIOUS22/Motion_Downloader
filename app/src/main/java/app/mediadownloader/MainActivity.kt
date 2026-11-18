@@ -68,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 
 /** True when the app was opened from the "Update available" notification. */
 private fun activityWantsUpdate(ctx: Context): Boolean =
@@ -82,6 +83,11 @@ class MainActivity : ComponentActivity() {
         handleShare(intent)
         DownloadQueue.watchNetwork(this)
         setContent { App(vm) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        vm.refreshRemote()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -128,6 +134,8 @@ private fun App(vm: MainViewModel) {
     }
     LaunchedEffect(Unit) { if (activityWantsUpdate(ctx)) { vm.checkAppUpdate(true); screen = "settings" } }
     LaunchedEffect(s.analysis) { if (s.analysis != null) screen = "result" }
+    val browserOn = s.remote.features["browser"] != false
+    LaunchedEffect(browserOn, screen) { if (!browserOn && screen == "browser") screen = "home" }
     BackHandler(enabled = screen != "home") {
         when {
             screen == "result" -> { vm.clearAnalysis(); screen = lastScreen }
@@ -183,10 +191,47 @@ private fun App(vm: MainViewModel) {
                 dismissButton = { TextButton(onClick = { vm.dismissUpdate() }) { Text("Cancel") } },
             )
         }
+        // Owner controls (remote.json): maintenance, forced update, announcement
+        val rem = s.remote
+        val forced = rem.minVersion.isNotBlank() && Updater.isNewer(rem.minVersion, BuildConfig.VERSION_NAME)
+        val ann = rem.announcement
+        val noBack = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        if (rem.maintenance != null) {
+            AlertDialog(
+                onDismissRequest = { }, properties = noBack, containerColor = p.surface,
+                title = { Text("Under maintenance") }, text = { Text(rem.maintenance) },
+                confirmButton = { TextButton(onClick = { (ctx as? ComponentActivity)?.finishAffinity() }) { Text("Close") } },
+            )
+        } else if (forced) {
+            AlertDialog(
+                onDismissRequest = { }, properties = noBack, containerColor = p.surface,
+                title = { Text("Update required") },
+                text = { Text("This version (v${BuildConfig.VERSION_NAME}) is no longer supported. Please update to continue.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/PIOUS22/Motion_Downloader"))) }
+                    }) { Text("Download now", fontWeight = FontWeight.Bold) }
+                },
+            )
+        } else if (!showPerm && upd == null && ann != null && ann.id != s.annSeen) {
+            AlertDialog(
+                onDismissRequest = { vm.dismissAnnouncement(ann.id) }, containerColor = p.surface,
+                title = { Text(ann.title) }, text = { Text(ann.message) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (ann.url.isNotBlank()) runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(ann.url))) }
+                        vm.dismissAnnouncement(ann.id)
+                    }) { Text(if (ann.url.isNotBlank()) "Open" else "OK", fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = if (ann.url.isNotBlank()) {
+                    { TextButton(onClick = { vm.dismissAnnouncement(ann.id) }) { Text("Close") } }
+                } else null,
+            )
+        }
         Scaffold(
             containerColor = p.bg,
             bottomBar = {
-                if (screen != "result") NavBar(screen, hist.count { it.status == "active" || it.status == "pending" }) { screen = it }
+                if (screen != "result") NavBar(screen, hist.count { it.status == "active" || it.status == "pending" }, browserOn) { screen = it }
             },
         ) { pad ->
             when (screen) {
@@ -212,13 +257,13 @@ private fun App(vm: MainViewModel) {
 }
 
 @Composable
-private fun NavBar(cur: String, running: Int, onNav: (String) -> Unit) {
+private fun NavBar(cur: String, running: Int, browserOn: Boolean, onNav: (String) -> Unit) {
     val p = LocalPal.current
     Column(Modifier.background(p.surface).navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(p.border))
         Row(Modifier.fillMaxWidth().height(68.dp).padding(horizontal = 12.dp, vertical = 6.dp)) {
             NavItem("Home", Ic.Home, cur == "home") { onNav("home") }
-            NavItem("Browser", Ic.Globe, cur == "browser") { onNav("browser") }
+            if (browserOn) NavItem("Browser", Ic.Globe, cur == "browser") { onNav("browser") }
             NavItem("Downloads", Ic.Download, cur == "downloads", if (running > 0) running.toString() else null) { onNav("downloads") }
             NavItem("Settings", Ic.Settings, cur == "settings") { onNav("settings") }
         }

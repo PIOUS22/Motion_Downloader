@@ -13,6 +13,7 @@ class MediaDownloaderApp : Application() {
         super.onCreate()
         History.init(this)
         DownloadQueue.watchNetwork(this)
+        Telemetry.subscribe(this)
         // Remove temporary download folders left behind by cancelled, failed or killed downloads.
         // (A new process means no download is running yet, so this is safe.)
         Thread {

@@ -11,8 +11,8 @@ object AppPrefs {
     fun subLang(ctx: Context) = p(ctx).getString("def_sub", "off") ?: "off"     // "off" or yt-dlp code like en.*
     fun wifiOnly(ctx: Context) = p(ctx).getBoolean("wifi_only", false)
     fun maxParallel(ctx: Context) = p(ctx).getInt("max_parallel", 2).coerceIn(1, 3)
-    fun inAppPlayer(ctx: Context) = p(ctx).getBoolean("in_app_player", true)
-    fun popup(ctx: Context) = p(ctx).getBoolean("popup_on", true)
+    fun inAppPlayer(ctx: Context) = p(ctx).getBoolean("in_app_player", true) && Remote.feature(ctx, "in_app_player")
+    fun popup(ctx: Context) = p(ctx).getBoolean("popup_on", true) && Remote.feature(ctx, "share_popup")
 
     /** Index into PRESETS that a new download starts with. */
     fun defaultPreset(ctx: Context): Int =

@@ -171,6 +171,7 @@ object DownloadQueue {
         val id = item.id
         val engine = Engine(ctx, "md-$id")
         engines[id] = engine
+        Telemetry.event(ctx, "download_started", "platform" to item.platform, "kind" to (if (item.fileUrl != null) "file" else if (item.audio) "audio" else "video"))
         var res: DownloadResult
         try {
             if (item.fileUrl != null) {
@@ -218,6 +219,7 @@ object DownloadQueue {
                 "cancel" -> History.finish(id, res.copy(cancelled = true))
                 else -> {
                     History.finish(id, res)
+                    Telemetry.event(ctx, if (res.savedCount > 0) "download_done" else "download_failed", "platform" to item.platform)
                     if (res.savedCount > 0) {
                         DownloadService.finished(ctx, "${item.title} — saved to ${res.savedPath}", res.savedUri, res.savedMime)
                     } else if (!res.cancelled) {

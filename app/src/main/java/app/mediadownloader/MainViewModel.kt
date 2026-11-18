@@ -37,6 +37,8 @@ data class UiState(
     val maxParallel: Int = 2,
     val quickPopup: Boolean = true,
     val inAppPlayer: Boolean = true,
+    val remote: RemoteState = RemoteState(),
+    val annSeen: String = "",
     val defQuality: Int = 720,
     val defAudio: Boolean = false,
     val defSub: String = "off",
@@ -71,6 +73,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             maxParallel = AppPrefs.maxParallel(app),
             quickPopup = AppPrefs.popup(app),
             inAppPlayer = AppPrefs.inAppPlayer(app),
+            remote = Remote.cached(app),
+            annSeen = prefs.getString("ann_seen", "") ?: "",
             defQuality = AppPrefs.quality(app),
             defAudio = AppPrefs.audioFormat(app),
             defSub = AppPrefs.subLang(app),
@@ -186,6 +190,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _ui.update { it.copy(updateBusy = false, updateProgress = -1f, updateMsg = "Update download failed: ${e.message?.take(100)}") }
             }
         }
+    }
+
+    private var lastRemote = 0L
+
+    /** Reads owner settings (force update, announcement, feature switches) from GitHub; at most every 10 minutes. */
+    fun refreshRemote(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - lastRemote < 10 * 60 * 1000L) return
+        lastRemote = now
+        viewModelScope.launch(Dispatchers.IO) {
+            val r = Remote.fetch(ctx) ?: return@launch
+            _ui.update { it.copy(remote = r) }
+        }
+    }
+
+    fun dismissAnnouncement(id: String) {
+        prefs.edit().putString("ann_seen", id).apply()
+        _ui.update { it.copy(annSeen = id) }
     }
 
     fun dismissUpdate() = _ui.update { it.copy(appUpdate = null, updateMsg = null) }
