@@ -15,6 +15,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -82,7 +85,16 @@ class BrowserHolder(private val ctx: Context) {
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
     }
 
+    /** Pull down at the top of a page to reload it. */
+    val swipe = androidx.swiperefreshlayout.widget.SwipeRefreshLayout(ctx).apply {
+        addView(web, android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+        setColorSchemeColors(0xFF4F46E5.toInt())
+        setOnRefreshListener { web.reload() }
+        setOnChildScrollUpCallback { _, _ -> web.scrollY > 0 }
+    }
+
     init {
+        BrowserHistory.init(ctx)
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {
                 url = pageUrl ?: url
@@ -91,6 +103,8 @@ class BrowserHolder(private val ctx: Context) {
 
             override fun onPageFinished(view: WebView?, pageUrl: String?) {
                 url = pageUrl ?: url
+                swipe.isRefreshing = false
+                BrowserHistory.add(pageUrl, view?.title)
                 canBack = view?.canGoBack() == true
             }
 
@@ -109,6 +123,7 @@ class BrowserHolder(private val ctx: Context) {
         web.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 progress = newProgress
+                if (newProgress >= 100) swipe.isRefreshing = false
             }
         }
         // File links (pdf, apk, zip, mp4 ...): ask first, like a download manager.
@@ -166,6 +181,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
     val focus = LocalFocusManager.current
     var field by remember { mutableStateOf(b.url) }
     var editing by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
     LaunchedEffect(b.url) { if (!editing) field = b.url }
     LaunchedEffect(Unit) { b.web.onResume() }
     DisposableEffect(Unit) { onDispose { b.web.onPause() } }
@@ -202,14 +218,14 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                 modifier = Modifier.weight(1f).onFocusChanged { editing = it.isFocused },
                 placeholder = { Text("Search or type a link") }, singleLine = true, shape = RoundedCornerShape(22.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                keyboardActions = KeyboardActions(onGo = { b.go(field); focus.clearFocus() }),
+                keyboardActions = KeyboardActions(onGo = { showHistory = false; b.go(field); focus.clearFocus() }),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = p.soft, unfocusedContainerColor = p.soft,
                     focusedBorderColor = p.primary, unfocusedBorderColor = p.border,
                 ),
             )
-            RoundIconButton(Ic.Retry, "Reload", p.soft, p.text) { if (b.started) b.web.reload() else b.go(field) }
-            RoundIconButton(Ic.Home, "Start page", p.soft, p.text) { b.showStartPage(); field = "" }
+            RoundIconButton(Ic.Clock, "History", if (showHistory) p.tint else p.soft, if (showHistory) p.onTint else p.text) { showHistory = !showHistory }
+            RoundIconButton(Ic.Home, "Start page", p.soft, p.text) { showHistory = false; b.showStartPage(); field = "" }
         }
         if (b.started && b.progress in 1..99) {
             Box(Modifier.fillMaxWidth().height(3.dp).background0(p.border)) {
@@ -217,7 +233,9 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (!b.started) {
+            if (showHistory) {
+                HistoryList(onOpen = { u -> showHistory = false; b.go(u) }, onClose = { showHistory = false })
+            } else if (!b.started) {
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Browse anything", fontSize = 26.sp, fontWeight = FontWeight.Bold)
                     Text(
@@ -231,13 +249,13 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
             } else {
                 AndroidView(
                     factory = {
-                        (b.web.parent as? android.view.ViewGroup)?.removeView(b.web)
-                        b.web
+                        (b.swipe.parent as? android.view.ViewGroup)?.removeView(b.swipe)
+                        b.swipe
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            if (b.isPage() && b.hasVideo) {
+            if (!showHistory && b.isPage() && b.hasVideo) {
                 // small button: only while a video is open
                 Box(
                     Modifier.align(Alignment.BottomEnd).padding(16.dp).size(52.dp).clip(CircleShape)
@@ -291,4 +309,34 @@ private fun FileOfferDialog(o: FileOffer, onClose: () -> Unit, onSubmit: (String
             }
         },
     )
+}
+
+@Composable
+private fun HistoryList(onOpen: (String) -> Unit, onClose: () -> Unit) {
+    val p = LocalPal.current
+    val list by BrowserHistory.items.collectAsState()
+    val fmt = remember { java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault()) }
+    Column(Modifier.fillMaxSize().background(p.bg)) {
+        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp).height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("History", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (list.isNotEmpty()) TextButton(onClick = { BrowserHistory.clear() }) { Text("Clear all") }
+            TextButton(onClick = onClose) { Text("Close") }
+        }
+        if (list.isEmpty()) Text("No pages yet. Pages you open will be listed here.", color = p.muted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp))
+        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            items(list, key = { it.url }) { v ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { onOpen(v.url) }.padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(v.title.ifBlank { Urls.host(v.url).ifBlank { v.url } }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Muted(v.url, maxLines = 1)
+                        Muted(fmt.format(java.util.Date(v.time)))
+                    }
+                    RoundIconButton(Ic.Close, "Remove", p.soft, p.text) { BrowserHistory.remove(v.url) }
+                }
+            }
+        }
+    }
 }
