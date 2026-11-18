@@ -33,7 +33,7 @@ object Updater {
             conn.readTimeout = 8000
             conn.setRequestProperty("Accept", "application/vnd.github+json")
             conn.setRequestProperty("User-Agent", "MotionDownloader-Android")
-            if (conn.responseCode == 404) return null          // no release yet (or private repo)
+            if (conn.responseCode == 404) throw IllegalStateException("No public release found. The GitHub repo must be Public (Settings > Danger zone > Change visibility).")
             if (conn.responseCode != 200) throw IllegalStateException("GitHub answered ${conn.responseCode}")
             val j = JSONObject(conn.inputStream.bufferedReader().readText())
             val tag = j.optString("tag_name").removePrefix("v")

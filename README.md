@@ -44,4 +44,5 @@ The APK is signed with the debug key; use your own signing config in `app/build.
 - **Downloads** tab: filters All / Downloading / Pending / Done, Pause and Resume, Cancel, Retry, Play, clear finished. The list is saved on the phone.
 - **Internet drops?** The download is not failed. It shows "Waiting for internet…" and continues from where it stopped when the connection is back.
 - **Built-in player**: tap Play on a finished download (or its notification) to watch or listen inside the app. Rotate the phone for full screen. Turn it off in Settings > Playback to use another player app.
+- **Browser** tab: browse any website inside the app. On a video page tap **Download** to pick quality and save it. File links (PDF, APK, ZIP ...) download straight to Downloads/MotionDownloader/Files.
 - **Settings**: default quality, format and subtitle language; Wi-Fi only; simultaneous downloads (1-3); save location; quick share pop-up on/off; theme; cookies; update the app and yt-dlp.

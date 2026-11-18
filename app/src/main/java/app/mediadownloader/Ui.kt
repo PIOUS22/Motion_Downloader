@@ -121,6 +121,7 @@ object Ic {
     val Play = filled("M8 5v14l11-7z")
     val Retry = stroke("M20 12a8 8 0 1 1-2.3-5.6 M20 4v5h-5")
     val Copy = stroke("M9 9h10v11H9z M5 15V5h10")
+    val Globe = stroke("M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0 M4 12h16 M12 4c2.5 2.5 2.5 13.5 0 16 M12 4c-2.5 2.5-2.5 13.5 0 16")
     val Subs = stroke("M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z M8 11h3 M8 14h6 M14 11h2")
 }
 

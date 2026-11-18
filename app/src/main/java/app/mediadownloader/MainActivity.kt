@@ -108,6 +108,16 @@ private fun App(vm: MainViewModel) {
     val hist by History.items.collectAsState()
     var screen by rememberSaveable { mutableStateOf("home") }
     var dlFilter by rememberSaveable { mutableStateOf("all") }
+    var lastScreen by rememberSaveable { mutableStateOf("home") }
+    val browser = remember { BrowserHolder(ctx) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { browser.web.destroy() } }
+    LaunchedEffect(screen) { if (screen != "result") lastScreen = screen }
+    // analysis problems while browsing show as a message (the Home screen is not visible)
+    LaunchedEffect(s.status, s.statusIsError) {
+        if (screen == "browser" && s.statusIsError && s.status.isNotBlank()) {
+            Toast.makeText(ctx, s.status.take(200), Toast.LENGTH_LONG).show()
+        }
+    }
 
     // first-run permissions
     val prefs = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -119,8 +129,11 @@ private fun App(vm: MainViewModel) {
     LaunchedEffect(Unit) { if (activityWantsUpdate(ctx)) { vm.checkAppUpdate(true); screen = "settings" } }
     LaunchedEffect(s.analysis) { if (s.analysis != null) screen = "result" }
     BackHandler(enabled = screen != "home") {
-        if (screen == "result") vm.clearAnalysis()
-        screen = "home"
+        when {
+            screen == "result" -> { vm.clearAnalysis(); screen = lastScreen }
+            screen == "browser" && browser.started && browser.web.canGoBack() -> browser.web.goBack()
+            else -> screen = "home"
+        }
     }
 
     AppTheme(s.theme) {
@@ -164,7 +177,12 @@ private fun App(vm: MainViewModel) {
                         Toast.makeText(ctx, "Added to Downloads", Toast.LENGTH_SHORT).show()
                         dlFilter = "all"
                         screen = "downloads"
-                    } else screen = "home"
+                    } else screen = lastScreen
+                }
+                "browser" -> BrowserScreen(pad, browser) { link ->
+                    Toast.makeText(ctx, "Analyzing link\u2026", Toast.LENGTH_SHORT).show()
+                    vm.setUrl(Urls.normalize(link))
+                    vm.analyze()
                 }
                 "downloads" -> DownloadsScreen(pad, hist, dlFilter) { dlFilter = it }
                 "settings" -> SettingsScreen(pad, vm, s)
@@ -181,6 +199,7 @@ private fun NavBar(cur: String, running: Int, onNav: (String) -> Unit) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(p.border))
         Row(Modifier.fillMaxWidth().height(68.dp).padding(horizontal = 12.dp, vertical = 6.dp)) {
             NavItem("Home", Ic.Home, cur == "home") { onNav("home") }
+            NavItem("Browser", Ic.Globe, cur == "browser") { onNav("browser") }
             NavItem("Downloads", Ic.Download, cur == "downloads", if (running > 0) running.toString() else null) { onNav("downloads") }
             NavItem("Settings", Ic.Settings, cur == "settings") { onNav("settings") }
         }
