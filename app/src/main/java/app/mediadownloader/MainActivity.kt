@@ -125,7 +125,7 @@ private fun App(vm: MainViewModel) {
     var dlFilter by rememberSaveable { mutableStateOf("all") }
     var lastScreen by rememberSaveable { mutableStateOf("home") }
     val browser = remember { BrowserHolder(ctx) }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { browser.web.destroy() } }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { browser.destroyAll() } }
     LaunchedEffect(screen) { if (screen != "result") lastScreen = screen }
     // analysis problems while browsing show as a message (the Home screen is not visible)
     LaunchedEffect(s.status, s.statusIsError) {
@@ -151,7 +151,10 @@ private fun App(vm: MainViewModel) {
     BackHandler(enabled = screen != "home") {
         when {
             screen == "result" -> { vm.clearAnalysis(); screen = lastScreen }
+            screen == "browser" && browser.showTabs -> browser.showTabs = false
+            screen == "browser" && browser.showHistory -> browser.showHistory = false
             screen == "browser" && browser.started && browser.web.canGoBack() -> browser.web.goBack()
+            screen == "browser" && browser.tabs.size > 1 -> browser.closeTab(browser.index)
             else -> screen = "home"
         }
     }
