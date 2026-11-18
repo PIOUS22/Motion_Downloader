@@ -12,10 +12,16 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+
+/** readyVersion != null: the APK is downloaded and waiting for "Install now". */
+data class UpdateState(val downloading: Boolean = false, val progress: Float = 0f, val readyVersion: String? = null)
 
 data class UpdateInfo(val version: String, val url: String, val notes: String, val sizeBytes: Long)
 
@@ -117,6 +123,99 @@ object Updater {
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         )
         return true
+    }
+
+    private val _state = MutableStateFlow(UpdateState())
+    val state: StateFlow<UpdateState> = _state.asStateFlow()
+
+    private fun sp(ctx: Context) = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    /** Reads what was downloaded earlier; forgets it when it is not newer than the installed version. */
+    fun loadState(ctx: Context) {
+        val p = sp(ctx)
+        val v = p.getString("ready_version", null)
+        val path = p.getString("ready_path", null)
+        val f = path?.let { File(it) }
+        if (v != null && f != null && f.exists() && isNewer(v, BuildConfig.VERSION_NAME)) {
+            _state.value = _state.value.copy(readyVersion = v)
+        } else {
+            p.edit().remove("ready_version").remove("ready_path").apply()
+            File(ctx.cacheDir, "updates").deleteRecursively()
+            _state.value = _state.value.copy(readyVersion = null)
+        }
+    }
+
+    /** Opens the installer for the downloaded update. */
+    fun installReady(ctx: Context): Boolean {
+        val f = sp(ctx).getString("ready_path", null)?.let { File(it) }
+        if (f == null || !f.exists()) return false
+        return install(ctx, f)
+    }
+
+    /** "Download now": downloads the APK in the background (notification with progress), then offers "Install now". */
+    fun startBackground(ctx: Context, info: UpdateInfo) {
+        val app = ctx.applicationContext
+        if (_state.value.downloading) return
+        _state.value = _state.value.copy(downloading = true, progress = 0f)
+        DownloadService.start(app)
+        Thread {
+            try {
+                var last = 0L
+                val file = download(app, info) { pr ->
+                    _state.value = _state.value.copy(progress = pr)
+                    val now = System.currentTimeMillis()
+                    if (now - last > 1000) { last = now; DownloadService.update(app, "Downloading update ${info.version}", (pr * 100).toInt()) }
+                }
+                sp(app).edit().putString("ready_version", info.version).putString("ready_path", file.absolutePath).apply()
+                _state.value = UpdateState(downloading = false, progress = 1f, readyVersion = info.version)
+                notifyReady(app, info.version)
+            } catch (e: Throwable) {
+                _state.value = _state.value.copy(downloading = false)
+                postSimple(app, "Update download failed", "Check your internet and try again from the app.")
+            } finally {
+                DownloadService.stop(app)
+            }
+        }.start()
+    }
+
+    private fun channel(ctx: Context): NotificationManager {
+        val nm = ctx.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, "App updates", NotificationManager.IMPORTANCE_DEFAULT))
+        }
+        return nm
+    }
+
+    private fun postSimple(ctx: Context, title: String, text: String) {
+        runCatching {
+            channel(ctx).notify(
+                NOTIF_ID + 2,
+                NotificationCompat.Builder(ctx, CHANNEL).setSmallIcon(android.R.drawable.stat_notify_error)
+                    .setContentTitle(title).setContentText(text).setAutoCancel(true).build()
+            )
+        }
+    }
+
+    /** Second notification: update downloaded, with an "Install now" button. */
+    private fun notifyReady(ctx: Context, version: String) {
+        runCatching {
+            val install = PendingIntent.getActivity(
+                ctx, 8, Intent(ctx, MainActivity::class.java).putExtra("install_update", true)
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            channel(ctx).notify(
+                NOTIF_ID + 1,
+                NotificationCompat.Builder(ctx, CHANNEL)
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .setContentTitle("Update ready")
+                    .setContentText("Motion Downloader $version has been downloaded.")
+                    .setContentIntent(install)
+                    .addAction(0, "Install now", install)
+                    .setAutoCancel(true)
+                    .build()
+            )
+        }
     }
 
     /** Notification-panel message: "Update available". Shown once per version. */

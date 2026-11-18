@@ -81,6 +81,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleShare(intent)
+        handleInstall(intent)
         DownloadQueue.watchNetwork(this)
         setContent { App(vm) }
     }
@@ -94,6 +95,14 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleShare(intent)
+        handleInstall(intent)
+    }
+
+    private fun handleInstall(i: Intent?) {
+        if (i?.getBooleanExtra("install_update", false) == true) {
+            i.removeExtra("install_update")
+            Updater.installReady(this)
+        }
     }
 
     private fun handleShare(i: Intent?) {
@@ -132,6 +141,9 @@ private fun App(vm: MainViewModel) {
         prefs.edit().putBoolean("perm_asked", true).apply()
         showPerm = false
     }
+    LaunchedEffect(Unit) { Updater.loadState(ctx) }
+    val us by Updater.state.collectAsState()
+    var readyLater by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(Unit) { if (activityWantsUpdate(ctx)) { vm.checkAppUpdate(true); screen = "settings" } }
     LaunchedEffect(s.analysis) { if (s.analysis != null) screen = "result" }
     val browserOn = s.remote.features["browser"] != false
@@ -182,13 +194,24 @@ private fun App(vm: MainViewModel) {
                 text = { Text("Motion Downloader v${upd.version} is ready.\nYou have v${BuildConfig.VERSION_NAME}.") },
                 confirmButton = {
                     TextButton(onClick = {
-                        runCatching {
-                            ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/PIOUS22/Motion_Downloader")))
-                        }
+                        Updater.startBackground(ctx, upd)
+                        Toast.makeText(ctx, "Downloading the update in the background\u2026", Toast.LENGTH_LONG).show()
                         vm.dismissUpdate()
                     }) { Text("Download now", fontWeight = FontWeight.Bold) }
                 },
                 dismissButton = { TextButton(onClick = { vm.dismissUpdate() }) { Text("Cancel") } },
+            )
+        }
+        // Update downloaded: "Install now"
+        val ready = us.readyVersion
+        if (ready != null && upd == null && !showPerm && readyLater != ready) {
+            AlertDialog(
+                onDismissRequest = { readyLater = ready },
+                containerColor = p.surface,
+                title = { Text("Update ready") },
+                text = { Text("Motion Downloader v$ready has been downloaded. Install it now?") },
+                confirmButton = { TextButton(onClick = { Updater.installReady(ctx) }) { Text("Install now", fontWeight = FontWeight.Bold) } },
+                dismissButton = { TextButton(onClick = { readyLater = ready }) { Text("Later") } },
             )
         }
         // Owner controls (remote.json): maintenance, forced update, announcement
