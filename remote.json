@@ -1,6 +1,6 @@
 {
   "min_version": "",
-  "maintenance": { "enabled": false, "message": "" },
+  "maintenance": { "enabled": true, "message": "" },
   "announcement": { "id": "", "title": "", "message": "", "url": "" },
-  "features": { "browser": true, "share_popup": true, "in_app_player": true }
+  "features": { "browser": false, "share_popup": true, "in_app_player": true }
 }
