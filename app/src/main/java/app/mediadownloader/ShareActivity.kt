@@ -38,7 +38,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -107,6 +106,8 @@ class ShareViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 class ShareActivity : ComponentActivity() {
+    override fun attachBaseContext(base: android.content.Context) { super.attachBaseContext(Lang.wrap(base)) }
+
     private val vm: ShareViewModel by viewModels()
     private var url: String = ""
 

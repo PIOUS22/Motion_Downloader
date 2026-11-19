@@ -44,8 +44,10 @@ object Lang {
         "Indonesia" to "in", "Portugu\u00EAs" to "pt", "\u0420\u0443\u0441\u0441\u043A\u0438\u0439" to "ru", "\u0627\u0644\u0639\u0631\u0628\u064A\u0629" to "ar",
     )
 
-    fun get(ctx: Context) = AppPrefs.p(ctx).getString("lang", "en") ?: "en"
-    fun set(ctx: Context, code: String) { AppPrefs.p(ctx).edit().putString("lang", code).apply() }
+    @Volatile var code: String = "en"
+
+    fun get(ctx: Context) = (AppPrefs.p(ctx).getString("lang", "en") ?: "en").also { code = it }
+    fun set(ctx: Context, c: String) { AppPrefs.p(ctx).edit().putString("lang", c).apply(); code = c }
 
     fun wrap(base: Context): Context {
         val code = get(base)
