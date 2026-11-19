@@ -43,6 +43,15 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
@@ -68,6 +77,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import androidx.compose.ui.window.DialogProperties
 
 /** True when the app was opened from the "Update available" notification. */
@@ -121,9 +131,13 @@ private fun App(vm: MainViewModel) {
     val s by vm.ui.collectAsState()
     val ctx = LocalContext.current
     val hist by History.items.collectAsState()
-    var screen by rememberSaveable { mutableStateOf("home") }
+    var screen by rememberSaveable { mutableStateOf("downloads") }
     var dlFilter by rememberSaveable { mutableStateOf("all") }
-    var lastScreen by rememberSaveable { mutableStateOf("home") }
+    var dlTab by rememberSaveable { mutableStateOf("downloading") }
+    var showAdd by rememberSaveable { mutableStateOf(false) }
+    var lastScreen by rememberSaveable { mutableStateOf("downloads") }
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
     val browser = remember { BrowserHolder(ctx) }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { browser.destroyAll() } }
     LaunchedEffect(screen) { if (screen != "result") lastScreen = screen }
@@ -145,17 +159,18 @@ private fun App(vm: MainViewModel) {
     val us by Updater.state.collectAsState()
     var readyLater by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(Unit) { if (activityWantsUpdate(ctx)) { vm.checkAppUpdate(true); screen = "settings" } }
-    LaunchedEffect(s.analysis) { if (s.analysis != null) screen = "result" }
+    LaunchedEffect(s.analysis) { if (s.analysis != null) { showAdd = false; screen = "result" } }
     val browserOn = s.remote.features["browser"] != false
-    LaunchedEffect(browserOn, screen) { if (!browserOn && screen == "browser") screen = "home" }
-    BackHandler(enabled = screen != "home") {
+    LaunchedEffect(browserOn, screen) { if (!browserOn && screen == "browser") screen = "downloads" }
+    BackHandler(enabled = screen != "downloads" || drawer.isOpen) {
         when {
+            drawer.isOpen -> scope.launch { drawer.close() }
             screen == "result" -> { vm.clearAnalysis(); screen = lastScreen }
             screen == "browser" && browser.showTabs -> browser.showTabs = false
             screen == "browser" && browser.showHistory -> browser.showHistory = false
             screen == "browser" && browser.started && browser.web.canGoBack() -> browser.web.goBack()
             screen == "browser" && browser.tabs.size > 1 -> browser.closeTab(browser.index)
-            else -> screen = "home"
+            else -> screen = "downloads"
         }
     }
 
@@ -254,30 +269,44 @@ private fun App(vm: MainViewModel) {
                 } else null,
             )
         }
-        Scaffold(
-            containerColor = p.bg,
-            bottomBar = {
-                if (screen != "result") NavBar(screen, hist.count { it.status == "active" || it.status == "pending" }, browserOn) { screen = it }
+        fun go(target: String, filter: String = "all") {
+            dlFilter = filter
+            screen = target
+            scope.launch { drawer.close() }
+        }
+        if (showAdd) AddLinkDialog(vm, s) { showAdd = false }
+        ModalNavigationDrawer(
+            drawerState = drawer,
+            gesturesEnabled = screen == "downloads" || drawer.isOpen,
+            drawerContent = {
+                DrawerContent(screen, dlFilter, hist, browserOn, { go("downloads", "all") }, { go("browser") }, { f -> dlTab = "finished"; go("downloads", f) }, { go("settings") })
             },
-        ) { pad ->
+        ) {
+        Scaffold(containerColor = p.bg) { pad ->
             when (screen) {
                 "result" -> ResultScreen(pad, vm, s) { queued ->
                     vm.clearAnalysis()
                     if (queued) {
                         Toast.makeText(ctx, "Added to Downloads", Toast.LENGTH_SHORT).show()
                         dlFilter = "all"
+                        dlTab = "downloading"
                         screen = "downloads"
                     } else screen = lastScreen
                 }
-                "browser" -> BrowserScreen(pad, browser) { link ->
+                "browser" -> BrowserScreen(pad, browser, onExit = { screen = "downloads" }) { link ->
                     Toast.makeText(ctx, "Analyzing link\u2026", Toast.LENGTH_SHORT).show()
                     vm.setUrl(Urls.normalize(link))
                     vm.analyze()
                 }
-                "downloads" -> DownloadsScreen(pad, hist, dlFilter) { dlFilter = it }
-                "settings" -> SettingsScreen(pad, vm, s)
-                else -> HomeScreen(pad, vm, s, hist) { screen = "downloads" }
+                "settings" -> SettingsScreen(pad, vm, s) { screen = "downloads" }
+                else -> DownloadsScreen(
+                    pad, hist, dlTab, { dlTab = it }, dlFilter,
+                    onMenu = { scope.launch { drawer.open() } },
+                    onBrowser = if (browserOn) ({ screen = "browser" }) else null,
+                    onAdd = { showAdd = true },
+                )
             }
+        }
         }
     }
 }
@@ -687,46 +716,181 @@ private fun PickPanel(vm: MainViewModel, s: UiState) {
 
 // ====================================================================== Downloads
 
+private fun categoryOf(d: DlItem): String {
+    val ext = d.title.substringAfterLast('.', "").lowercase()
+    val mime = d.mime ?: ""
+    return when {
+        d.fileUrl == null -> if (d.audio) "Music" else "Video"
+        mime.startsWith("video/") || ext in setOf("mp4", "mkv", "webm", "avi", "mov", "3gp", "flv") -> "Video"
+        mime.startsWith("audio/") || ext in setOf("mp3", "m4a", "aac", "wav", "flac", "ogg", "opus") -> "Music"
+        ext == "apk" -> "Programs"
+        ext in setOf("zip", "rar", "7z", "tar", "gz", "bz2", "xz") -> "Compressed"
+        ext in setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "epub", "csv") || mime.startsWith("text/") -> "Documents"
+        else -> "Other"
+    }
+}
+
+private val CATEGORIES = listOf("Video", "Music", "Documents", "Programs", "Compressed", "Other")
+
 @Composable
-private fun DownloadsScreen(pad: PaddingValues, all: List<DlItem>, filter: String, onFilter: (String) -> Unit) {
+private fun DrawerContent(
+    screen: String, filter: String, hist: List<DlItem>, browserOn: Boolean,
+    onDownloads: () -> Unit, onBrowser: () -> Unit, onCategory: (String) -> Unit, onSettings: () -> Unit,
+) {
+    val p = LocalPal.current
+    ModalDrawerSheet(drawerContainerColor = p.surface, modifier = Modifier.width(300.dp)) {
+        Column(Modifier.fillMaxHeight().verticalScroll(rememberScrollState()).statusBarsPadding().navigationBarsPadding()) {
+            Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(p.primary), contentAlignment = Alignment.Center) {
+                    Ico(Ic.Download, 24.dp, Color.White)
+                }
+                Column {
+                    Text("Motion Downloader", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Muted("Version ${BuildConfig.VERSION_NAME}")
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(p.border))
+            DrawerRow(Ic.Download, "Downloads", null, screen == "downloads" && filter == "all", onDownloads)
+            if (browserOn) DrawerRow(Ic.Globe, "Browser", null, screen == "browser", onBrowser)
+            Text("CATEGORIES", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.muted, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp))
+            CATEGORIES.forEach { c ->
+                val n = hist.count { it.status == "done" && categoryOf(it) == c }
+                DrawerRow(Ic.Chevron, c, n.toString(), screen == "downloads" && filter == c) { onCategory(c) }
+            }
+            Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(1.dp).background(p.border))
+            DrawerRow(Ic.Settings, "Settings", null, screen == "settings", onSettings)
+        }
+    }
+}
+
+@Composable
+private fun DrawerRow(icon: ImageVector, label: String, count: String?, selected: Boolean, onClick: () -> Unit) {
+    val p = LocalPal.current
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp).height(48.dp).clip(RoundedCornerShape(12.dp))
+            .background(if (selected) p.tint else Color.Transparent).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Ico(icon, 20.dp, if (selected) p.onTint else p.text)
+        Text(label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = if (selected) p.onTint else p.text, modifier = Modifier.weight(1f))
+        if (count != null) Text(count, fontSize = 13.sp, color = p.muted)
+    }
+}
+
+@Composable
+private fun AddLinkDialog(vm: MainViewModel, s: UiState, onClose: () -> Unit) {
     val p = LocalPal.current
     val ctx = LocalContext.current
-    val shown = when (filter) {
-        "downloading" -> all.filter { it.status == "active" || it.status == "paused" }
-        "pending" -> all.filter { it.status == "pending" }
-        "done" -> all.filter { it.status == "done" }
-        else -> all
+    AlertDialog(
+        onDismissRequest = onClose, containerColor = p.surface,
+        title = { Text("Add link") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = s.url, onValueChange = vm::setUrl, modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("https://\u2026") }, singleLine = true, shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = p.soft, unfocusedContainerColor = p.soft,
+                        focusedBorderColor = p.primary, unfocusedBorderColor = p.border,
+                    ),
+                )
+                PillButton("Paste from clipboard", p.tint, p.onTint) {
+                    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val t = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()
+                    if (!t.isNullOrBlank()) vm.setUrl(Urls.normalize(t))
+                }
+                if (s.status.isNotBlank() && (s.statusIsError || s.analyzing)) {
+                    Text(s.status, color = if (s.statusIsError) p.errFg else p.muted, fontSize = 13.sp)
+                }
+                if (s.engineError != null) Text("Download engine failed to start: ${s.engineError}", color = p.errFg, fontSize = 13.sp)
+                else if (!s.engineReady) Muted("Preparing the download engine\u2026")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = vm::analyze, enabled = !s.analyzing && s.url.isNotBlank()) {
+                Text(if (s.analyzing) "Analyzing\u2026" else "Analyze", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun DownloadsScreen(
+    pad: PaddingValues, all: List<DlItem>, tab: String, onTab: (String) -> Unit, category: String,
+    onMenu: () -> Unit, onBrowser: (() -> Unit)?, onAdd: () -> Unit,
+) {
+    val p = LocalPal.current
+    val ctx = LocalContext.current
+    var searching by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    fun match(d: DlItem) = query.isBlank() || d.title.contains(query, ignoreCase = true)
+    val downloading = all.filter { it.status == "active" && match(it) }
+    val queue = all.filter { (it.status == "pending" || it.status == "paused") && match(it) }
+    val finished = all.filter {
+        (it.status == "done" || it.status == "failed" || it.status == "cancelled") &&
+            (category == "all" || categoryOf(it) == category) && match(it)
     }
+    val shown = when (tab) { "finished" -> finished; "queue" -> queue; else -> downloading }
     val fmt = remember { java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault()) }
 
-    Column(Modifier.fillMaxSize().padding(pad)) {
-        Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Downloads", fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button) { History.clearFinished() },
-                contentAlignment = Alignment.Center,
-            ) { Ico(Ic.Trash, 22.dp) }
-        }
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            listOf("all" to "All", "downloading" to "Downloading", "pending" to "Pending", "done" to "Done").forEach { (k, l) ->
-                FilterPill(l, filter == k) { onFilter(k) }
+    Box(Modifier.fillMaxSize().padding(pad)) {
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button, onClick = onMenu), contentAlignment = Alignment.Center) { Ico(Ic.Menu, 22.dp) }
+                if (searching) {
+                    BasicTextField(
+                        value = query, onValueChange = { query = it }, singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, color = p.text),
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                        decorationBox = { inner -> Box { if (query.isEmpty()) Text("Search downloads", color = p.muted, fontSize = 17.sp); inner() } },
+                    )
+                } else {
+                    Text(
+                        if (category == "all") "Downloads" else category, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f).padding(start = 8.dp),
+                    )
+                }
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button) { searching = !searching; if (!searching) query = "" }, contentAlignment = Alignment.Center) {
+                    Ico(if (searching) Ic.Close else Ic.Search, 22.dp)
+                }
+                if (tab == "finished") Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button) { History.clearFinished() }, contentAlignment = Alignment.Center) { Ico(Ic.Trash, 22.dp) }
+                if (onBrowser != null) Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button, onClick = onBrowser), contentAlignment = Alignment.Center) { Ico(Ic.Globe, 22.dp) }
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                listOf("downloading" to "Downloading" to downloading.size, "finished" to "Finished" to finished.size, "queue" to "Queue" to queue.size).forEach { (kl, n) ->
+                    val (k, l) = kl
+                    val sel = tab == k
+                    Column(Modifier.weight(1f).clickable(role = Role.Tab) { onTab(k) }, horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if (n > 0) "$l ($n)" else l, fontSize = 14.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium, color = if (sel) p.onTint else p.muted, modifier = Modifier.padding(vertical = 12.dp), maxLines = 1)
+                        Box(Modifier.fillMaxWidth().height(3.dp).background(if (sel) p.primary else Color.Transparent))
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(p.border))
+            if (shown.isEmpty()) {
+                Text(
+                    when {
+                        query.isNotBlank() -> "No matches."
+                        tab == "downloading" -> "No active downloads. Tap + to add a link."
+                        tab == "queue" -> "The queue is empty."
+                        else -> "No finished downloads here."
+                    },
+                    color = p.muted, fontSize = 14.sp, modifier = Modifier.padding(24.dp),
+                )
+            }
+            LazyColumn(
+                Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(shown, key = { it.id }) { d -> DlCard(d, fmt, ctx) }
             }
         }
-        if (shown.isEmpty()) {
-            Text(
-                if (all.isEmpty()) "Nothing here yet. Downloads you start will appear in this list." else "No downloads in this filter.",
-                color = p.muted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp),
-            )
-        }
-        LazyColumn(
-            Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(shown, key = { it.id }) { d -> DlCard(d, fmt, ctx) }
-        }
+        Box(
+            Modifier.align(Alignment.BottomEnd).padding(20.dp).size(58.dp).clip(RoundedCornerShape(18.dp))
+                .background(p.primary).clickable(role = Role.Button, onClick = onAdd),
+            contentAlignment = Alignment.Center,
+        ) { Ico(Ic.Plus, 26.dp, Color.White) }
     }
 }
 
@@ -885,7 +1049,7 @@ private fun <T> ChoiceDialog(title: String, options: List<Pair<String, T>>, sele
 }
 
 @Composable
-private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState) {
+private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, onBack: () -> Unit = {}) {
     val p = LocalPal.current
     var dlg by remember { mutableStateOf<String?>(null) }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -896,8 +1060,9 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState) {
     }
 
     Column(Modifier.fillMaxSize().padding(pad)) {
-        Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button, onClick = onBack), contentAlignment = Alignment.Center) { Ico(Ic.Back, 22.dp) }
+            Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
         }
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 4.dp),

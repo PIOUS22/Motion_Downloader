@@ -271,7 +271,7 @@ private val SHORTCUTS = listOf(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String) -> Unit) {
+fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {}, onDownloadPage: (String) -> Unit) {
     val p = LocalPal.current
     val focus = LocalFocusManager.current
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -343,6 +343,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                     })
                     DropdownMenuItem(text = { Text("History") }, onClick = { menu = false; b.showTabs = false; b.showHistory = true })
                     DropdownMenuItem(text = { Text("Start page") }, onClick = { menu = false; b.showHistory = false; tab.showStartPage(); field = "" })
+                    DropdownMenuItem(text = { Text("Downloads") }, onClick = { menu = false; onExit() })
                     DropdownMenuItem(text = { Text("Close tab") }, onClick = { menu = false; b.closeTab(b.index) })
                 }
             }
