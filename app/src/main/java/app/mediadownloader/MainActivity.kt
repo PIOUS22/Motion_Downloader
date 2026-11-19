@@ -63,6 +63,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -274,12 +275,38 @@ private fun App(vm: MainViewModel) {
             screen = target
             scope.launch { drawer.close() }
         }
+        var showBattery by remember {
+            mutableStateOf(
+                !prefs.getBoolean("battery_asked", false) && runCatching {
+                    !(ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
+                }.getOrDefault(false)
+            )
+        }
+        if (!showPerm && showBattery) {
+            AlertDialog(
+                onDismissRequest = { }, containerColor = p.surface,
+                title = { Text("Warning") },
+                text = { Text("Battery optimization can interrupt running downloads.\n\nOpen the settings and choose: All apps \u2192 Motion Downloader \u2192 Don't optimize.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        prefs.edit().putBoolean("battery_asked", true).apply(); showBattery = false
+                        runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                    }) { Text("OK", fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = { TextButton(onClick = { prefs.edit().putBoolean("battery_asked", true).apply(); showBattery = false }) { Text("Cancel") } },
+            )
+        }
         if (showAdd) AddLinkDialog(vm, s) { showAdd = false }
         ModalNavigationDrawer(
             drawerState = drawer,
             gesturesEnabled = screen == "downloads" || drawer.isOpen,
             drawerContent = {
-                DrawerContent(screen, dlFilter, hist, browserOn, { go("downloads", "all") }, { go("browser") }, { f -> dlTab = "finished"; go("downloads", f) }, { go("settings") })
+                DrawerContent(screen, dlFilter, hist, browserOn, { go("downloads", "all") }, { go("browser") }, { f -> dlTab = "finished"; go("downloads", f) }, { go("settings") },
+                    {
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "Motion Downloader: https://github.com/PIOUS22/Motion_Downloader/releases/latest")
+                        runCatching { ctx.startActivity(Intent.createChooser(send, "Share the app")) }
+                    },
+                    { (ctx as? android.app.Activity)?.finishAffinity() })
             },
         ) {
         Scaffold(containerColor = p.bg) { pad ->
@@ -723,6 +750,8 @@ private fun categoryOf(d: DlItem): String {
         d.fileUrl == null -> if (d.audio) "Music" else "Video"
         mime.startsWith("video/") || ext in setOf("mp4", "mkv", "webm", "avi", "mov", "3gp", "flv") -> "Video"
         mime.startsWith("audio/") || ext in setOf("mp3", "m4a", "aac", "wav", "flac", "ogg", "opus") -> "Music"
+        mime.startsWith("image/") || ext in setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic") -> "Photos"
+        ext in setOf("srt", "vtt", "ass", "ssa", "sub") -> "Subtitles"
         ext == "apk" -> "Programs"
         ext in setOf("zip", "rar", "7z", "tar", "gz", "bz2", "xz") -> "Compressed"
         ext in setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "epub", "csv") || mime.startsWith("text/") -> "Documents"
@@ -730,12 +759,13 @@ private fun categoryOf(d: DlItem): String {
     }
 }
 
-private val CATEGORIES = listOf("Video", "Music", "Documents", "Programs", "Compressed", "Other")
+private val CATEGORIES = listOf("Video", "Music", "Photos", "Documents", "Subtitles", "Programs", "Compressed", "Other")
 
 @Composable
 private fun DrawerContent(
     screen: String, filter: String, hist: List<DlItem>, browserOn: Boolean,
     onDownloads: () -> Unit, onBrowser: () -> Unit, onCategory: (String) -> Unit, onSettings: () -> Unit,
+    onShare: () -> Unit = {}, onExit: () -> Unit = {},
 ) {
     val p = LocalPal.current
     ModalDrawerSheet(drawerContainerColor = p.surface, modifier = Modifier.width(300.dp)) {
@@ -759,6 +789,8 @@ private fun DrawerContent(
             }
             Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(1.dp).background(p.border))
             DrawerRow(Ic.Settings, "Settings", null, screen == "settings", onSettings)
+            DrawerRow(Ic.Link, "Share the app", null, false, onShare)
+            DrawerRow(Ic.Close, "Exit", null, false, onExit)
         }
     }
 }
@@ -781,6 +813,16 @@ private fun DrawerRow(icon: ImageVector, label: String, count: String?, selected
 private fun AddLinkDialog(vm: MainViewModel, s: UiState, onClose: () -> Unit) {
     val p = LocalPal.current
     val ctx = LocalContext.current
+    LaunchedEffect(Unit) {
+        if (s.url.isBlank()) {
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val t = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()?.trim()
+            if (!t.isNullOrBlank() && (t.startsWith("http://") || t.startsWith("https://"))) {
+                vm.setUrl(Urls.normalize(t))
+                Toast.makeText(ctx, "Pasted from your clipboard", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     AlertDialog(
         onDismissRequest = onClose, containerColor = p.surface,
         title = { Text("Add link") },
@@ -824,6 +866,8 @@ private fun DownloadsScreen(
     val ctx = LocalContext.current
     var searching by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    var sort by remember { mutableStateOf("new") }
+    var sortMenu by remember { mutableStateOf(false) }
     fun match(d: DlItem) = query.isBlank() || d.title.contains(query, ignoreCase = true)
     val downloading = all.filter { it.status == "active" && match(it) }
     val queue = all.filter { (it.status == "pending" || it.status == "paused") && match(it) }
@@ -831,7 +875,12 @@ private fun DownloadsScreen(
         (it.status == "done" || it.status == "failed" || it.status == "cancelled") &&
             (category == "all" || categoryOf(it) == category) && match(it)
     }
-    val shown = when (tab) { "finished" -> finished; "queue" -> queue; else -> downloading }
+    val shownRaw = when (tab) { "finished" -> finished; "queue" -> queue; else -> downloading }
+    val shown = when (sort) {
+        "old" -> shownRaw.sortedBy { it.time }
+        "name" -> shownRaw.sortedBy { it.title.lowercase() }
+        else -> shownRaw.sortedByDescending { it.time }
+    }
     val fmt = remember { java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault()) }
 
     Box(Modifier.fillMaxSize().padding(pad)) {
@@ -853,6 +902,14 @@ private fun DownloadsScreen(
                 }
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button) { searching = !searching; if (!searching) query = "" }, contentAlignment = Alignment.Center) {
                     Ico(if (searching) Ic.Close else Ic.Search, 22.dp)
+                }
+                Box {
+                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button) { sortMenu = true }, contentAlignment = Alignment.Center) { Ico(Ic.Sort, 22.dp) }
+                    DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                        listOf("new" to "Newest first", "old" to "Oldest first", "name" to "Name (A\u2013Z)").forEach { (k, l) ->
+                            DropdownMenuItem(text = { Text(l, fontWeight = if (sort == k) FontWeight.Bold else FontWeight.Normal) }, onClick = { sort = k; sortMenu = false })
+                        }
+                    }
                 }
                 if (tab == "finished") Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button) { History.clearFinished() }, contentAlignment = Alignment.Center) { Ico(Ic.Trash, 22.dp) }
                 if (onBrowser != null) Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button, onClick = onBrowser), contentAlignment = Alignment.Center) { Ico(Ic.Globe, 22.dp) }
@@ -1058,6 +1115,14 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, on
     val cookiePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) vm.importCookies(uri)
     }
+    val sctx = LocalContext.current
+    var rev by remember { mutableIntStateOf(0) }
+    val speed = remember(rev) { AppPrefs.speedLimit(sctx) }
+    val battery = remember(rev) { AppPrefs.batteryStop(sctx) }
+    val removeFin = remember(rev) { AppPrefs.removeFinished(sctx) }
+    val notifyOn = remember(rev) { AppPrefs.notifications(sctx) }
+    fun putInt(k: String, v: Int) { AppPrefs.p(sctx).edit().putInt(k, v).apply(); rev++ }
+    fun putBool(k: String, v: Boolean) { AppPrefs.p(sctx).edit().putBoolean(k, v).apply(); rev++ }
 
     Column(Modifier.fillMaxSize().padding(pad)) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1079,7 +1144,13 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, on
             Group("Downloading") {
                 SettingSwitch("Wi-Fi only", "Wait for Wi-Fi, don't use mobile data", s.wifiOnly, onChange = vm::setWifiOnly)
                 SettingRow("Simultaneous downloads", s.maxParallel.toString()) { dlg = "parallel" }
+                SettingRow("Speed limit", if (speed == 0) "Off" else if (speed >= 1024) "${speed / 1024} MB/s" else "$speed KB/s") { dlg = "speed" }
+                SettingRow("Stop downloads if battery below", if (battery == 0) "Off" else "$battery%") { dlg = "battery" }
+                SettingSwitch("Remove finished from list", "Files are not deleted", removeFin, onChange = { putBool("remove_finished", it) })
                 SettingRow("Save location", if (s.saveUri == null) "Downloads/MotionDownloader" else s.saveLabel, last = true) { dlg = "save" }
+            }
+            Group("Notifications") {
+                SettingSwitch("Finished / failed notifications", "Show a notification when a download ends", notifyOn, last = true, onChange = { putBool("notify_done", it) })
             }
             Group("Share pop-up") {
                 SettingSwitch(
@@ -1146,6 +1217,16 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, on
         "quality" -> ChoiceDialog("Default quality", QUALITY_PRESETS.map { qualityName(it.first) to it.first }, s.defQuality, vm::setDefQuality) { dlg = null }
         "format" -> ChoiceDialog("Default format", listOf("Video · MP4" to false, "Audio · MP3" to true), s.defAudio, vm::setDefAudio) { dlg = null }
         "sub" -> ChoiceDialog("Subtitle language", listOf("Off" to "off") + SUB_LANGS.map { it.first to it.second }, s.defSub, vm::setDefSub) { dlg = null }
+        "speed" -> ChoiceDialog(
+            "Speed limit",
+            listOf("Off (maximum)" to 0, "256 KB/s" to 256, "512 KB/s" to 512, "1 MB/s" to 1024, "2 MB/s" to 2048, "5 MB/s" to 5120),
+            speed, { putInt("speed_kb", it) }
+        ) { dlg = null }
+        "battery" -> ChoiceDialog(
+            "Stop downloads if battery below",
+            listOf("Off" to 0, "10%" to 10, "15%" to 15, "20%" to 20, "30%" to 30, "50%" to 50),
+            battery, { putInt("battery_stop", it); DownloadQueue.pump(sctx) }
+        ) { dlg = null }
         "parallel" -> ChoiceDialog("Simultaneous downloads", listOf("1" to 1, "2" to 2, "3" to 3), s.maxParallel, vm::setMaxParallel) { dlg = null }
         "save" -> ChoiceDialog(
             "Save location",

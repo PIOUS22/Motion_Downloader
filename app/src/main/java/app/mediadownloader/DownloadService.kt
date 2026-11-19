@@ -94,6 +94,7 @@ class DownloadService : Service() {
 
         /** "Finished" notification on the notification panel; tapping it opens the downloaded file. */
         fun finished(ctx: Context, text: String, uri: Uri? = null, mime: String? = null) {
+            if (!AppPrefs.notifications(ctx)) return
             runCatching {
                 val nm = ctx.getSystemService(NotificationManager::class.java)
                 if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL_DONE) == null) {

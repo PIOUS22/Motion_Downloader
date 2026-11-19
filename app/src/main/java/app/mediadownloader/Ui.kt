@@ -109,6 +109,7 @@ object Ic {
     val Home = stroke("M4 11 12 4l8 7 M6 10v10h12V10", 1.9f)
     val Settings = stroke("M4 7h10 M18 7h2 M14 7a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M4 17h2 M10 17h10 M6 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0", 1.9f)
     val Back = stroke("M15 5 8 12l7 7")
+    val Sort = stroke("M4 6h12 M4 12h8 M4 18h4 M18 7v11 M15 15l3 3 3-3", 2f)
     val Menu = stroke("M4 7h16 M4 12h16 M4 17h16", 2f)
     val Plus = stroke("M12 5v14 M5 12h14", 2.4f)
     val Search = stroke("M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0 M16 16l4 4", 2f)

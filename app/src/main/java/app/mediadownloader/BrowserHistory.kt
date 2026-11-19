@@ -58,3 +58,39 @@ object BrowserHistory {
         p.edit().putString("items", a.toString()).apply()
     }
 }
+
+/** Saved pages (bookmarks), newest first. */
+object Bookmarks {
+    private var prefs: SharedPreferences? = null
+    private val _items = MutableStateFlow<List<VisitedPage>>(emptyList())
+    val items: StateFlow<List<VisitedPage>> = _items.asStateFlow()
+
+    @Synchronized
+    fun init(ctx: Context) {
+        if (prefs != null) return
+        val p = ctx.applicationContext.getSharedPreferences("bookmarks", Context.MODE_PRIVATE)
+        prefs = p
+        _items.value = runCatching {
+            val a = JSONArray(p.getString("items", "[]"))
+            (0 until a.length()).map { val o = a.getJSONObject(it); VisitedPage(o.getString("url"), o.optString("title"), o.optLong("time")) }
+        }.getOrDefault(emptyList())
+    }
+
+    fun has(url: String) = _items.value.any { it.url == url }
+
+    fun toggle(url: String, title: String): Boolean {
+        val added = !has(url)
+        _items.update { l -> if (added) listOf(VisitedPage(url, title, System.currentTimeMillis())) + l else l.filter { it.url != url } }
+        persist()
+        return added
+    }
+
+    fun remove(url: String) { _items.update { l -> l.filter { it.url != url } }; persist() }
+
+    private fun persist() {
+        val p = prefs ?: return
+        val a = JSONArray()
+        _items.value.forEach { a.put(JSONObject().put("url", it.url).put("title", it.title).put("time", it.time)) }
+        p.edit().putString("items", a.toString()).apply()
+    }
+}

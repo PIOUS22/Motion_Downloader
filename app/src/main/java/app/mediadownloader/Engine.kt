@@ -246,6 +246,7 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
         r.addOption("--retries", 10)
         r.addOption("--fragment-retries", 10)
         r.addOption("--retry-sleep", 3)
+        AppPrefs.speedLimit(ctx).takeIf { it > 0 }?.let { r.addOption("--limit-rate", "${it}K") }
         r.addOption("--trim-filenames", 160)
         r.addOption("--embed-metadata")
         if (isPlaylist) {

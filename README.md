@@ -51,3 +51,7 @@ The APK is signed with the debug key; use your own signing config in `app/build.
 
 ## Owner controls
 See OWNER_GUIDE.md: remote.json (force update, announcement, maintenance, feature switches) and optional Firebase (analytics, crash reports, push).
+
+## IDM-style features
+Downloads screen (tabs, search, sort, categories), speed limit, battery stop, remove-finished, notification switch,
+browser menu (find in page, bookmarks, dark mode, desktop site, JavaScript switch, block ads, clone tab, view source, clear data).

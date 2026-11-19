@@ -69,6 +69,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
+object BrowserSettings { var blockAds by mutableStateOf(true) }
+
+private val AD_HOSTS = listOf(
+    "doubleclick.net", "googlesyndication.com", "googleadservices.com", "adservice.google.com", "adsystem.com",
+    "adnxs.com", "taboola.com", "outbrain.com", "popads.net", "propellerads.com", "exoclick.com", "criteo.com",
+    "pubmatic.com", "rubiconproject.com", "moatads.com", "ads.yahoo.com", "adsterra.com", "popcash.net", "juicyads.com",
+)
+private const val DESKTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
 class FileOffer(val url: String, val ua: String?, val mime: String?, val length: Long, val name: String)
 
 /** One browser tab: its own WebView and page state. */
@@ -82,6 +91,33 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
     var canForward by mutableStateOf(false)
     var started by mutableStateOf(false)
     var hasVideo by mutableStateOf(false)
+    var desktop by mutableStateOf(false)
+    var dark by mutableStateOf(false)
+    var js by mutableStateOf(true)
+
+    private var defaultUa: String? = null
+
+    fun applyDesktop(v: Boolean) {
+        desktop = v
+        web.settings.userAgentString = if (v) DESKTOP_UA else defaultUa
+        if (started) web.reload()
+    }
+
+    @Suppress("DEPRECATION")
+    fun applyDark(v: Boolean) {
+        dark = v
+        runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 33) web.settings.isAlgorithmicDarkeningAllowed = v
+            else if (android.os.Build.VERSION.SDK_INT >= 29) web.settings.forceDark = if (v) android.webkit.WebSettings.FORCE_DARK_ON else android.webkit.WebSettings.FORCE_DARK_OFF
+        }
+        if (started) web.reload()
+    }
+
+    fun applyJs(v: Boolean) {
+        js = v
+        web.settings.javaScriptEnabled = v
+        if (started) web.reload()
+    }
 
     val web: WebView = WebView(ctx).apply {
         settings.javaScriptEnabled = true
@@ -130,6 +166,8 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
 
     init {
         BrowserHistory.init(ctx)
+        Bookmarks.init(ctx)
+        defaultUa = web.settings.userAgentString
         web.addJavascriptInterface(Bridge(), "MDBridge")
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {
@@ -151,6 +189,14 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
             override fun doUpdateVisitedHistory(view: WebView?, pageUrl: String?, isReload: Boolean) {
                 url = pageUrl ?: url
                 sync(view)
+            }
+
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): android.webkit.WebResourceResponse? {
+                val h = request?.url?.host ?: return null
+                if (BrowserSettings.blockAds && AD_HOSTS.any { h == it || h.endsWith(".$it") }) {
+                    return android.webkit.WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
+                }
+                return null
             }
 
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -214,6 +260,16 @@ class BrowserHolder(private val ctx: Context) {
     var index by mutableIntStateOf(0)
     var showTabs by mutableStateOf(false)
     var showHistory by mutableStateOf(false)
+    var showBookmarks by mutableStateOf(false)
+    var showFind by mutableStateOf(false)
+    var findQuery by mutableStateOf("")
+    var sourceText by mutableStateOf<String?>(null)
+
+    fun cloneTab() {
+        val u = cur.url
+        addTab()
+        if (u.isNotBlank()) cur.go(u)
+    }
 
     private fun makeTab() = BrowserTab(ctx) { offer = it }
 
@@ -229,6 +285,7 @@ class BrowserHolder(private val ctx: Context) {
         index = tabs.lastIndex
         showTabs = false
         showHistory = false
+        showBookmarks = false
     }
 
     fun select(i: Int) {
@@ -332,19 +389,68 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
             Box {
                 RoundIconButton(Ic.More, "Menu", p.soft, p.text) { menu = true }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("New tab") }, onClick = { menu = false; b.addTab() })
-                    DropdownMenuItem(text = { Text("Reload") }, onClick = { menu = false; if (tab.started) tab.web.reload() })
-                    DropdownMenuItem(text = { Text("Forward") }, enabled = tab.canForward, onClick = { menu = false; tab.web.goForward() })
-                    DropdownMenuItem(text = { Text("Copy link") }, enabled = tab.isPage(), onClick = {
-                        menu = false
+                    @Composable fun item(label: String, enabled: Boolean = true, check: Boolean? = null, action: () -> Unit) =
+                        DropdownMenuItem(
+                            text = { Text(label) }, enabled = enabled,
+                            trailingIcon = if (check != null) ({ Text(if (check) "\u2611" else "\u2610", fontSize = 18.sp) }) else null,
+                            onClick = { menu = false; action() },
+                        )
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        TextButton(onClick = { menu = false; if (tab.web.canGoBack()) tab.web.goBack() }, enabled = tab.canBack) { Text("\u2190") }
+                        TextButton(onClick = { menu = false; tab.web.goForward() }, enabled = tab.canForward) { Text("\u2192") }
+                        TextButton(onClick = {
+                            menu = false
+                            if (tab.isPage()) { val a = Bookmarks.toggle(tab.url, tab.title); Toast.makeText(ctx, if (a) "Bookmark added" else "Bookmark removed", Toast.LENGTH_SHORT).show() }
+                        }, enabled = tab.isPage()) { Text(if (Bookmarks.has(tab.url)) "\u2605" else "\u2606") }
+                        TextButton(onClick = { menu = false; if (tab.started) tab.web.reload() }) { Text("\u21BB") }
+                    }
+                    item("New tab") { b.addTab() }
+                    item("Clone tab", tab.isPage()) { b.cloneTab() }
+                    item("Find in page", tab.isPage()) { b.showFind = true }
+                    item("Copy link", tab.isPage()) {
                         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("link", tab.url))
                         Toast.makeText(ctx, "Link copied", Toast.LENGTH_SHORT).show()
-                    })
-                    DropdownMenuItem(text = { Text("History") }, onClick = { menu = false; b.showTabs = false; b.showHistory = true })
-                    DropdownMenuItem(text = { Text("Start page") }, onClick = { menu = false; b.showHistory = false; tab.showStartPage(); field = "" })
-                    DropdownMenuItem(text = { Text("Downloads") }, onClick = { menu = false; onExit() })
-                    DropdownMenuItem(text = { Text("Close tab") }, onClick = { menu = false; b.closeTab(b.index) })
+                    }
+                    item("Copy all tab links") {
+                        val all = b.tabs.filter { it.isPage() }.joinToString("\n") { it.url }
+                        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("links", all))
+                        Toast.makeText(ctx, "Links copied", Toast.LENGTH_SHORT).show()
+                    }
+                    item("Share link", tab.isPage()) {
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, tab.url)
+                        runCatching { ctx.startActivity(Intent.createChooser(send, "Share link").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    }
+                    item("Open tabs for links in clipboard") {
+                        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val txt = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString() ?: ""
+                        val links = Regex("https?://\\S+").findAll(txt).map { it.value }.take(10).toList()
+                        if (links.isEmpty()) Toast.makeText(ctx, "No links in the clipboard", Toast.LENGTH_SHORT).show()
+                        links.forEach { b.addTab(); b.cur.go(it) }
+                    }
+                    item("Bookmarks") { b.showTabs = false; b.showHistory = false; b.showBookmarks = true }
+                    item("History") { b.showTabs = false; b.showBookmarks = false; b.showHistory = true }
+                    item("Dark mode", true, tab.dark) { tab.applyDark(!tab.dark) }
+                    item("Request desktop site", tab.started, tab.desktop) { tab.applyDesktop(!tab.desktop) }
+                    item("Enable JavaScript", true, tab.js) { tab.applyJs(!tab.js) }
+                    item("Block ads", true, BrowserSettings.blockAds) { BrowserSettings.blockAds = !BrowserSettings.blockAds; if (tab.started) tab.web.reload() }
+                    item("View page source", tab.isPage()) {
+                        tab.web.evaluateJavascript("document.documentElement.outerHTML") { r ->
+                            b.sourceText = runCatching { (org.json.JSONTokener(r).nextValue() as? String) ?: r }.getOrDefault(r ?: "").take(60000)
+                        }
+                    }
+                    item("Clear browsing data") {
+                        BrowserHistory.clear()
+                        CookieManager.getInstance().removeAllCookies(null)
+                        android.webkit.WebStorage.getInstance().deleteAllData()
+                        tab.web.clearCache(true)
+                        tab.web.clearFormData()
+                        Toast.makeText(ctx, "Browsing data cleared", Toast.LENGTH_SHORT).show()
+                    }
+                    item("Start page") { b.showHistory = false; b.showBookmarks = false; tab.showStartPage(); field = "" }
+                    item("Close tab") { b.closeTab(b.index) }
+                    item("Exit browser") { onExit() }
                 }
             }
         }
@@ -353,9 +459,32 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
                 Box(Modifier.fillMaxWidth(tab.progress / 100f).height(3.dp).background(p.primary))
             }
         }
+        if (b.showFind && !b.showTabs && !b.showHistory && !b.showBookmarks) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(
+                    value = b.findQuery, onValueChange = { b.findQuery = it; tab.web.findAllAsync(it) },
+                    modifier = Modifier.weight(1f), placeholder = { Text("Find in page") }, singleLine = true,
+                    shape = RoundedCornerShape(22.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = p.soft, unfocusedContainerColor = p.soft, focusedBorderColor = p.primary, unfocusedBorderColor = p.border),
+                )
+                TextButton(onClick = { tab.web.findNext(false) }) { Text("\u2191") }
+                TextButton(onClick = { tab.web.findNext(true) }) { Text("\u2193") }
+                TextButton(onClick = { b.showFind = false; b.findQuery = ""; tab.web.clearMatches() }) { Text("Done") }
+            }
+        }
+        b.sourceText?.let { src ->
+            AlertDialog(
+                onDismissRequest = { b.sourceText = null }, containerColor = p.surface,
+                title = { Text("Page source") },
+                text = { Text(src, fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, modifier = Modifier.verticalScroll(rememberScrollState())) },
+                confirmButton = { TextButton(onClick = { b.sourceText = null }) { Text("Close") } },
+            )
+        }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (b.showTabs) {
                 TabList(b)
+            } else if (b.showBookmarks) {
+                BookmarkList(onOpen = { u -> b.showBookmarks = false; tab.go(u) }, onClose = { b.showBookmarks = false })
             } else if (b.showHistory) {
                 HistoryList(onOpen = { u -> b.showHistory = false; tab.go(u) }, onClose = { b.showHistory = false })
             } else if (!tab.started) {
@@ -380,7 +509,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
                     )
                 }
             }
-            if (!b.showTabs && !b.showHistory && tab.isPage() && tab.hasVideo) {
+            if (!b.showTabs && !b.showHistory && !b.showBookmarks && tab.isPage() && tab.hasVideo) {
                 // small button: only while a video is open
                 Box(
                     Modifier.align(Alignment.BottomEnd).padding(16.dp).size(52.dp).clip(CircleShape)
@@ -495,6 +624,33 @@ private fun HistoryList(onOpen: (String) -> Unit, onClose: () -> Unit) {
                         Muted(fmt.format(java.util.Date(v.time)))
                     }
                     RoundIconButton(Ic.Close, "Remove", p.soft, p.text) { BrowserHistory.remove(v.url) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BookmarkList(onOpen: (String) -> Unit, onClose: () -> Unit) {
+    val p = LocalPal.current
+    val list by Bookmarks.items.collectAsState()
+    Column(Modifier.fillMaxSize().background(p.bg)) {
+        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp).height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Bookmarks", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            TextButton(onClick = onClose) { Text("Close") }
+        }
+        if (list.isEmpty()) Text("No bookmarks yet. Use the star in the menu to save a page.", color = p.muted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp))
+        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            items(list, key = { it.url }) { v ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { onOpen(v.url) }.padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(v.title.ifBlank { Urls.host(v.url).ifBlank { v.url } }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Muted(v.url, maxLines = 1)
+                    }
+                    RoundIconButton(Ic.Close, "Remove", p.soft, p.text) { Bookmarks.remove(v.url) }
                 }
             }
         }

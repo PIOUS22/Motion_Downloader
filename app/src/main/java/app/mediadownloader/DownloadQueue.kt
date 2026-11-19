@@ -81,6 +81,10 @@ object DownloadQueue {
                     handler.postDelayed({ pump(app) }, RETRY_MS)
                     return
                 }
+                if (AppPrefs.lowBattery(app)) {
+                    History.setDetailForPending("Waiting: battery is low")
+                    return
+                }
                 if ((wifiOnly(app) || next.wifiOnly) && !onWifi(app)) {
                     History.setDetailForPending("Waiting for Wi-Fi")
                     return
@@ -116,6 +120,9 @@ object DownloadQueue {
             var lastBytes = done
             var lastT = System.currentTimeMillis()
             var lastN = 0L
+            val have0 = have
+            val t0 = System.currentTimeMillis()
+            val limitKb = AppPrefs.speedLimit(ctx)
             conn.inputStream.use { input ->
                 java.io.FileOutputStream(part, have > 0).use { out ->
                     val buf = ByteArray(64 * 1024)
@@ -125,6 +132,11 @@ object DownloadQueue {
                         out.write(buf, 0, n)
                         done += n
                         val now = System.currentTimeMillis()
+                        if (limitKb > 0) {
+                            val allowedMs = (done - have0) * 1000L / (limitKb * 1024L)
+                            val el = now - t0
+                            if (allowedMs > el) Thread.sleep(minOf(allowedMs - el, 500L))
+                        }
                         if (now - lastT >= 700) {
                             val speed = (done - lastBytes) * 1000.0 / (now - lastT)
                             lastBytes = done
@@ -135,6 +147,7 @@ object DownloadQueue {
                                 " \u00B7 ${fmtSize(speed.toLong())}/s" + (if (eta >= 0) " \u00B7 ${eta}s left" else "")
                             History.progress(item.id, minOf(99.9f, pct), detail)
                             if (now - lastN > 1000) { lastN = now; DownloadService.update(ctx, "Downloading: $name", pct.toInt()) }
+                            if (AppPrefs.lowBattery(ctx) && userStop[item.id] == null) pause(ctx, item.id)
                         }
                     }
                 }
@@ -192,6 +205,7 @@ object DownloadQueue {
                         if (now - lastN > 1000) {
                             lastN = now
                             DownloadService.update(ctx, headline, percent.toInt())
+                            if (AppPrefs.lowBattery(ctx) && userStop[id] == null) pause(ctx, id)
                         }
                     }
 
@@ -219,6 +233,7 @@ object DownloadQueue {
                 "cancel" -> History.finish(id, res.copy(cancelled = true))
                 else -> {
                     History.finish(id, res)
+                    if (res.savedCount > 0 && AppPrefs.removeFinished(ctx)) History.remove(id)
                     Telemetry.event(ctx, if (res.savedCount > 0) "download_done" else "download_failed", "platform" to item.platform)
                     if (res.savedCount > 0) {
                         DownloadService.finished(ctx, "${item.title} — saved to ${res.savedPath}", res.savedUri, res.savedMime)
