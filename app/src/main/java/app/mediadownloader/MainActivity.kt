@@ -86,6 +86,8 @@ private fun activityWantsUpdate(ctx: Context): Boolean =
     (ctx as? ComponentActivity)?.intent?.getBooleanExtra("open_update", false) == true
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(base: Context) { super.attachBaseContext(Lang.wrap(base)) }
+
     private val vm: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -151,6 +153,7 @@ private fun App(vm: MainViewModel) {
 
     // first-run permissions
     val prefs = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    var showLang by remember { mutableStateOf(!prefs.getBoolean("lang_asked", false)) }
     var showPerm by remember { mutableStateOf(!prefs.getBoolean("perm_asked", false)) }
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         prefs.edit().putBoolean("perm_asked", true).apply()
@@ -177,7 +180,16 @@ private fun App(vm: MainViewModel) {
 
     AppTheme(s.theme) {
         val p = LocalPal.current
-        if (showPerm) {
+        if (showLang) {
+            ChoiceDialog(
+                "Language", Lang.LIST, Lang.get(ctx),
+                { code ->
+                    prefs.edit().putBoolean("lang_asked", true).apply()
+                    if (code != Lang.get(ctx)) { Lang.set(ctx, code); (ctx as? android.app.Activity)?.recreate() }
+                },
+            ) { prefs.edit().putBoolean("lang_asked", true).apply(); showLang = false }
+        }
+        if (showPerm && !showLang) {
             AlertDialog(
                 onDismissRequest = { },
                 containerColor = p.surface,
@@ -282,7 +294,7 @@ private fun App(vm: MainViewModel) {
                 }.getOrDefault(false)
             )
         }
-        if (!showPerm && showBattery) {
+        if (!showPerm && !showLang && showBattery) {
             AlertDialog(
                 onDismissRequest = { }, containerColor = p.surface,
                 title = { Text("Warning") },
@@ -1165,6 +1177,8 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, on
                 )
             }
             Group("Appearance") {
+                SettingRow("Language", Lang.LIST.firstOrNull { it.second == Lang.get(sctx) }?.first ?: "English", last = false) { dlg = "lang" }
+                RowDivider()
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("auto" to "Auto", "light" to "Light", "dark" to "Dark").forEach { (k, l) ->
                         Box(Modifier.weight(1f)) { Box(Modifier.fillMaxWidth()) { TintChip(l, s.theme == k) { vm.setTheme(k) } } }
@@ -1217,6 +1231,7 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, on
         "quality" -> ChoiceDialog("Default quality", QUALITY_PRESETS.map { qualityName(it.first) to it.first }, s.defQuality, vm::setDefQuality) { dlg = null }
         "format" -> ChoiceDialog("Default format", listOf("Video · MP4" to false, "Audio · MP3" to true), s.defAudio, vm::setDefAudio) { dlg = null }
         "sub" -> ChoiceDialog("Subtitle language", listOf("Off" to "off") + SUB_LANGS.map { it.first to it.second }, s.defSub, vm::setDefSub) { dlg = null }
+        "lang" -> ChoiceDialog("Language", Lang.LIST, Lang.get(sctx), { c -> Lang.set(sctx, c); (sctx as? android.app.Activity)?.recreate() }) { dlg = null }
         "speed" -> ChoiceDialog(
             "Speed limit",
             listOf("Off (maximum)" to 0, "256 KB/s" to 256, "512 KB/s" to 512, "1 MB/s" to 1024, "2 MB/s" to 2048, "5 MB/s" to 5120),

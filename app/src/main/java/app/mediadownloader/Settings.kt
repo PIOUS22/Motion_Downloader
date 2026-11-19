@@ -34,3 +34,26 @@ object AppPrefs {
     fun defaultPreset(ctx: Context): Int =
         if (audioFormat(ctx)) 5 else (QUALITY_PRESETS.firstOrNull { it.first == quality(ctx) }?.second ?: 2)
 }
+
+/** App language: chosen on first start and in Settings. */
+object Lang {
+    val LIST = listOf(
+        "English" to "en", "Default (Android system)" to "system", "\u09AC\u09BE\u0982\u09B2\u09BE" to "bn", "\u0939\u093F\u0902\u0926\u0940" to "hi",
+        "T\u00FCrk\u00E7e" to "tr", "Afrikaans" to "af", "Chinese (Simplified)" to "zh", "Czech" to "cs",
+        "Espa\u00F1ol" to "es", "French" to "fr", "German" to "de", "Greek" to "el", "Italiano" to "it",
+        "Indonesia" to "in", "Portugu\u00EAs" to "pt", "\u0420\u0443\u0441\u0441\u043A\u0438\u0439" to "ru", "\u0627\u0644\u0639\u0631\u0628\u064A\u0629" to "ar",
+    )
+
+    fun get(ctx: Context) = AppPrefs.p(ctx).getString("lang", "en") ?: "en"
+    fun set(ctx: Context, code: String) { AppPrefs.p(ctx).edit().putString("lang", code).apply() }
+
+    fun wrap(base: Context): Context {
+        val code = get(base)
+        if (code == "system") return base
+        val loc = java.util.Locale(code)
+        java.util.Locale.setDefault(loc)
+        val cfg = android.content.res.Configuration(base.resources.configuration)
+        cfg.setLocale(loc)
+        return base.createConfigurationContext(cfg)
+    }
+}
