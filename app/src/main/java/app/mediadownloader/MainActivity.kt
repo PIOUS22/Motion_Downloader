@@ -877,10 +877,10 @@ private fun IdmRow(d: DlItem, ctx: Context, fmt: java.text.SimpleDateFormat) {
     val p = LocalPal.current
     var menu by remember { mutableStateOf(false) }
     val running = d.status == "active" || d.status == "paused" || d.status == "pending"
-    val icon = when (categoryOf(d)) { "Video", "Music" -> Ic.Reel; "Programs" -> Ic.Phone; else -> Ic.FileIc }
+    val icon = when (categoryOf(d)) { "Video", "Music" -> Ic.Reel; "Programs" -> Ic.Phone; "Photos" -> Ic.Image; else -> Ic.FileIc }
     val shape = RoundedCornerShape(0.dp)
     Box(
-        Modifier.fillMaxWidth().background(if (running) p.surface else p.soft)
+        Modifier.fillMaxWidth().background(if (running) Color.White else Color(0xFFE4E4E4))
             .clickable {
                 when (d.status) {
                     "active" -> DownloadQueue.pause(ctx, d.id)
@@ -898,7 +898,14 @@ private fun IdmRow(d: DlItem, ctx: Context, fmt: java.text.SimpleDateFormat) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Ico(icon, 28.dp, p.muted)
             Column(Modifier.weight(1f)) {
-                Text(d.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row {
+                    Text(d.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (d.fileUrl != null) {
+                        Text(" (Resume: ", fontSize = 14.sp, maxLines = 1)
+                        Text("Yes", fontSize = 14.sp, color = Color(0xFF6B7F1E), maxLines = 1)
+                        Text(")", fontSize = 14.sp, maxLines = 1)
+                    }
+                }
                 val sub = when (d.status) {
                     "done" -> "100% | ${d.label.ifBlank { d.platform }}"
                     "failed" -> d.error ?: "Download failed"
@@ -966,6 +973,7 @@ private fun BatchDialog(onClose: () -> Unit) {
                     OutlinedTextField(value = to, onValueChange = { to = it.filter(Char::isDigit) }, label = { Text("To") }, singleLine = true, modifier = Modifier.weight(1f))
                     OutlinedTextField(value = digits, onValueChange = { digits = it.filter(Char::isDigit) }, label = { Text("Digits") }, singleLine = true, modifier = Modifier.weight(1f))
                 }
+                Text(storageLine(ctx), fontSize = 13.sp, color = p.muted)
                 Text(if (link.contains('*')) "Up to 500 links at once" else "No wildcard(*) character in download link", fontSize = 13.sp, color = p.muted)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = wifi, onCheckedChange = { wifi = it }); Text("Wi-Fi only", fontSize = 14.sp)

@@ -376,20 +376,6 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
             Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            RoundIconButton(Ic.Back, "Back", if (tab.canBack) p.tint else p.soft, if (tab.canBack) p.onTint else p.muted) {
-                if (tab.web.canGoBack()) tab.web.goBack()
-            }
-            OutlinedTextField(
-                value = field, onValueChange = { field = it },
-                modifier = Modifier.weight(1f).onFocusChanged { editing = it.isFocused },
-                placeholder = { Text("Search or type a link") }, singleLine = true, shape = RoundedCornerShape(22.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                keyboardActions = KeyboardActions(onGo = { b.showHistory = false; b.showTabs = false; tab.go(field); focus.clearFocus() }),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = p.soft, unfocusedContainerColor = p.soft,
-                    focusedBorderColor = p.primary, unfocusedBorderColor = p.border,
-                ),
-            )
             // tab count (like Chrome)
             Box(
                 Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
@@ -398,6 +384,24 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
                     .clickable(role = Role.Button) { b.showHistory = false; b.showTabs = !b.showTabs },
                 contentAlignment = Alignment.Center,
             ) { Text(b.tabs.size.toString(), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (b.showTabs) p.onTint else p.text) }
+            OutlinedTextField(
+                value = field, onValueChange = { field = it },
+                modifier = Modifier.weight(1f).onFocusChanged { editing = it.isFocused },
+                placeholder = { Text("Search or type a link") }, singleLine = true, shape = RoundedCornerShape(24.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = { b.showHistory = false; b.showTabs = false; tab.go(field); focus.clearFocus() }),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFEEEEEE), unfocusedContainerColor = Color(0xFFEEEEEE),
+                    focusedBorderColor = p.primary, unfocusedBorderColor = Color.Transparent,
+                ),
+            )
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button) {
+                    if (tab.found.isNotEmpty()) b.showFound = true
+                    else Toast.makeText(ctx, "No files detected on this page yet", Toast.LENGTH_SHORT).show()
+                },
+                contentAlignment = Alignment.Center,
+            ) { Ico(Ic.Download, 24.dp, p.text) }
             // three-dot menu
             Box {
                 RoundIconButton(Ic.More, "Menu", p.soft, p.text) { menu = true }
@@ -405,7 +409,9 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
                     @Composable fun item(label: String, enabled: Boolean = true, check: Boolean? = null, action: () -> Unit) =
                         DropdownMenuItem(
                             text = { Text(label) }, enabled = enabled,
-                            trailingIcon = if (check != null) ({ Text(if (check) "\u2611" else "\u2610", fontSize = 18.sp) }) else null,
+                            trailingIcon = if (check != null) ({
+                                Box(Modifier.size(22.dp).border(2.dp, Color(0xFF5A32AE), RoundedCornerShape(3.dp)).background(if (check) Color(0xFF5A32AE) else Color.Transparent))
+                            }) else null,
                             onClick = { menu = false; action() },
                         )
                     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -629,7 +635,10 @@ private fun FileOfferDialog(o: FileOffer, onClose: () -> Unit, onSubmit: (String
                 Muted("Link")
                 Text(o.url, fontSize = 13.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Muted("Save as")
-                OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = { Text(name.substringAfterLast('.', "").lowercase(), color = Color(0xFFE8622A), fontWeight = FontWeight.Bold, fontSize = 13.sp) },
+                )
                 Text("Size: $size", fontSize = 13.sp, color = p.muted)
                 Muted("Download location:")
                 Text(where, fontSize = 14.sp)

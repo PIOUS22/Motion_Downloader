@@ -110,6 +110,7 @@ object Ic {
     val Back = stroke("M15 5 8 12l7 7")
     val Phone = stroke("M8 3h8v18H8z M11 18h2", 1.8f)
     val Reel = stroke("M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M10 9a1 1 0 1 0 2 0a1 1 0 1 0 -2 0 M13 14a1 1 0 1 0 2 0a1 1 0 1 0 -2 0 M8 14a1 1 0 1 0 2 0a1 1 0 1 0 -2 0", 1.7f)
+    val Image = stroke("M4 5h16v14H4z M4 16l5-5 4 4 3-3 4 4 M15 9a1 1 0 1 0 2 0a1 1 0 1 0 -2 0", 1.8f)
     val FileIc = stroke("M7 3h7l4 4v14H7z M14 3v4h4", 1.8f)
     val Sort = stroke("M4 6h12 M4 12h8 M4 18h4 M18 7v11 M15 15l3 3 3-3", 2f)
     val Menu = stroke("M4 7h16 M4 12h16 M4 17h16", 2f)
