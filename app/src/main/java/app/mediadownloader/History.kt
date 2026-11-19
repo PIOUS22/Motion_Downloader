@@ -43,15 +43,16 @@ data class DlItem(
     val fileCookie: String? = null,
     val wifiOnly: Boolean = false,
     val retry: Boolean = true,
+    val speedKb: Int = 0,               // per-download speed limit, 0 = use the Settings value
 )
 
 fun newFileJob(
-    url: String, name: String, size: Long, ua: String?, cookie: String?, wifiOnly: Boolean, retry: Boolean,
+    url: String, name: String, size: Long, ua: String?, cookie: String?, wifiOnly: Boolean, retry: Boolean, speedKb: Int = 0,
 ) = DlItem(
     id = java.util.UUID.randomUUID().toString(),
     title = name, platform = "Files", audio = false, status = "pending",
     url = url, label = (if (size > 0) fmtSize(size) else "File") + " \u00B7 File",
-    fileUrl = url, fileName = name, fileUa = ua, fileCookie = cookie, wifiOnly = wifiOnly, retry = retry,
+    fileUrl = url, fileName = name, fileUa = ua, fileCookie = cookie, wifiOnly = wifiOnly, retry = retry, speedKb = speedKb,
 )
 
 fun newJob(
@@ -178,7 +179,7 @@ object History {
         put("subsMode", i.subsMode); put("subsAuto", i.subsAuto); put("label", i.label)
         put("fileUrl", i.fileUrl ?: JSONObject.NULL); put("fileName", i.fileName)
         put("fileUa", i.fileUa ?: JSONObject.NULL); put("fileCookie", i.fileCookie ?: JSONObject.NULL)
-        put("wifiOnly", i.wifiOnly); put("retry", i.retry)
+        put("wifiOnly", i.wifiOnly); put("retry", i.retry); put("speedKb", i.speedKb)
     }
 
     private fun fromJson(o: JSONObject): DlItem {
@@ -202,7 +203,7 @@ object History {
             fileName = o.optString("fileName"),
             fileUa = if (o.isNull("fileUa")) null else o.optString("fileUa"),
             fileCookie = if (o.isNull("fileCookie")) null else o.optString("fileCookie"),
-            wifiOnly = o.optBoolean("wifiOnly"), retry = o.optBoolean("retry", true),
+            wifiOnly = o.optBoolean("wifiOnly"), retry = o.optBoolean("retry", true), speedKb = o.optInt("speedKb", 0),
         )
     }
 }

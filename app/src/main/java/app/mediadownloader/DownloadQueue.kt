@@ -122,7 +122,7 @@ object DownloadQueue {
             var lastN = 0L
             val have0 = have
             val t0 = System.currentTimeMillis()
-            val limitKb = AppPrefs.speedLimit(ctx)
+            val limitKb = if (item.speedKb > 0) item.speedKb else AppPrefs.speedLimit(ctx)
             conn.inputStream.use { input ->
                 java.io.FileOutputStream(part, have > 0).use { out ->
                     val buf = ByteArray(64 * 1024)

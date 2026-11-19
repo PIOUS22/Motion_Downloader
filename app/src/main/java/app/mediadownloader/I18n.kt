@@ -38,6 +38,23 @@ fun Text(
 )
 
 private val BN: Map<String, String> = mapOf(
+    "All" to "সব",
+    "Error" to "ত্রুটি",
+    "Motion Downloader" to "Motion Downloader",
+    "Batch download" to "ব্যাচ ডাউনলোড",
+    "Batch download!" to "ব্যাচ ডাউনলোড!",
+    "Clear finished" to "সম্পন্ন মুছুন",
+    "File(s) detected!" to "ফাইল পাওয়া গেছে!",
+    "Tap a file to download it" to "ডাউনলোড করতে ফাইলে চাপুন",
+    "CLOSE" to "বন্ধ",
+    "CLEAR ALL" to "সব মুছুন",
+    "From" to "থেকে",
+    "To" to "পর্যন্ত",
+    "Digits" to "ডিজিট",
+    "Retry " to "আবার চেষ্টা",
+    "Nothing here yet. Tap + to add a link." to "এখানে এখনও কিছু নেই। লিংক যোগ করতে + চাপুন।",
+    "Download link" to "ডাউনলোড লিংক",
+    "Search…" to "খুঁজুন…",
     "Update available" to "আপডেট পাওয়া যাচ্ছে",
     "Language" to "ভাষা",
     "Permissions" to "অনুমতি",

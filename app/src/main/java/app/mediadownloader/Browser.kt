@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -77,6 +78,8 @@ private val AD_HOSTS = listOf(
 )
 private const val DESKTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
+class Detected(val url: String, val name: String)
+
 class FileOffer(val url: String, val ua: String?, val mime: String?, val length: Long, val name: String)
 
 /** One browser tab: its own WebView and page state. */
@@ -93,6 +96,9 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
     var desktop by mutableStateOf(false)
     var dark by mutableStateOf(false)
     var js by mutableStateOf(true)
+    val found = mutableStateListOf<Detected>()
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val MEDIA_EXT = setOf("mp4", "webm", "mkv", "mov", "flv", "mp3", "m4a", "aac", "ogg", "wav")
 
     private var defaultUa: String? = null
 
@@ -171,6 +177,7 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {
                 url = pageUrl ?: url
+                found.clear()
                 atTop = true
                 view?.evaluateJavascript(trackScroll, null)
                 sync(view)
@@ -192,6 +199,12 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): android.webkit.WebResourceResponse? {
                 val h = request?.url?.host ?: return null
+                request.url.path?.substringAfterLast('.', "")?.lowercase()?.takeIf { it in MEDIA_EXT }?.let {
+                    val u = request.url.toString()
+                    mainHandler.post {
+                        if (found.none { f -> f.url == u }) found.add(Detected(u, (request.url.lastPathSegment ?: "file.$it")))
+                    }
+                }
                 if (BrowserSettings.blockAds && AD_HOSTS.any { h == it || h.endsWith(".$it") }) {
                     return android.webkit.WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
                 }
@@ -261,6 +274,7 @@ class BrowserHolder(private val ctx: Context) {
     var showHistory by mutableStateOf(false)
     var showBookmarks by mutableStateOf(false)
     var showFind by mutableStateOf(false)
+    var showFound by mutableStateOf(false)
     var findQuery by mutableStateOf("")
     var sourceText by mutableStateOf<String?>(null)
 
@@ -349,9 +363,9 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
         tab.hasVideo = false
     }
     b.offer?.let { o ->
-        FileOfferDialog(o, onClose = { b.offer = null }) { name, wifi, retry, start ->
+        FileOfferDialog(o, onClose = { b.offer = null }) { name, wifi, retry, start, speed ->
             val cookie = CookieManager.getInstance().getCookie(o.url)
-            DownloadQueue.enqueue(ctx, newFileJob(o.url, name, o.length, o.ua, cookie, wifi, retry), start)
+            DownloadQueue.enqueue(ctx, newFileJob(o.url, name, o.length, o.ua, cookie, wifi, retry, speed), start)
             Toast.makeText(ctx, if (start) "Download started" else "Added to Downloads (press Resume to start)", Toast.LENGTH_SHORT).show()
             b.offer = null
         }
@@ -428,6 +442,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
                         if (links.isEmpty()) Toast.makeText(ctx, "No links in the clipboard", Toast.LENGTH_SHORT).show()
                         links.forEach { b.addTab(); b.cur.go(it) }
                     }
+                    item("Detected files (${tab.found.size})", tab.found.isNotEmpty()) { b.showFound = true }
                     item("Bookmarks") { b.showTabs = false; b.showHistory = false; b.showBookmarks = true }
                     item("History") { b.showTabs = false; b.showBookmarks = false; b.showHistory = true }
                     item("Dark mode", true, tab.dark) { tab.applyDark(!tab.dark) }
@@ -471,6 +486,34 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
                 TextButton(onClick = { b.showFind = false; b.findQuery = ""; tab.web.clearMatches() }) { Text("Done") }
             }
         }
+        if (b.showFound) {
+            AlertDialog(
+                onDismissRequest = { b.showFound = false }, containerColor = p.surface,
+                title = { Text("File(s) detected!", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Muted("Tap a file to download it")
+                        tab.found.toList().forEach { f ->
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    b.showFound = false
+                                    b.offer = FileOffer(f.url, tab.web.settings.userAgentString, null, -1L, f.name)
+                                }.padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Ico(Ic.Reel, 30.dp, p.muted)
+                                Column(Modifier.weight(1f)) {
+                                    Text(f.url, fontSize = 11.sp, color = p.muted, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    Text(f.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { b.showFound = false }) { Text("CLOSE") } },
+                dismissButton = { TextButton(onClick = { tab.found.clear(); b.showFound = false }) { Text("CLEAR ALL") } },
+            )
+        }
         b.sourceText?.let { src ->
             AlertDialog(
                 onDismissRequest = { b.sourceText = null }, containerColor = p.surface,
@@ -487,8 +530,17 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
             } else if (b.showHistory) {
                 HistoryList(onOpen = { u -> b.showHistory = false; tab.go(u) }, onClose = { b.showHistory = false })
             } else if (!tab.started) {
-                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Spacer(Modifier.height(48.dp))
                     Text("Browse anything", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    var q by remember { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = q, onValueChange = { q = it }, modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Search\u2026") }, singleLine = true, shape = RoundedCornerShape(28.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { tab.go(q); focus.clearFocus() }),
+                        colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = p.surface, unfocusedContainerColor = p.surface, focusedBorderColor = p.primary, unfocusedBorderColor = p.border),
+                    )
                     Text(
                         "Open a video page, then tap the small download button to save it. File links (PDF, APK, ZIP …) download directly.",
                         fontSize = 15.sp, color = p.muted,
@@ -559,12 +611,13 @@ private fun TabList(b: BrowserHolder) {
 }
 
 @Composable
-private fun FileOfferDialog(o: FileOffer, onClose: () -> Unit, onSubmit: (String, Boolean, Boolean, Boolean) -> Unit) {
+private fun FileOfferDialog(o: FileOffer, onClose: () -> Unit, onSubmit: (String, Boolean, Boolean, Boolean, Int) -> Unit) {
     val p = LocalPal.current
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var name by remember { mutableStateOf(o.name) }
     var wifi by remember { mutableStateOf(AppPrefs.wifiOnly(ctx)) }
     var retry by remember { mutableStateOf(true) }
+    var speedStep by remember { mutableIntStateOf(SPEEDS.lastIndex) }
     val where = if (AppPrefs.p(ctx).getString("save_uri", null) != null) "Your chosen folder / Files"
     else "Downloads/MotionDownloader/Files"
     val size = if (o.length > 0) "${fmtSize(o.length)} (${o.length} bytes)" else "Unknown"
@@ -580,20 +633,26 @@ private fun FileOfferDialog(o: FileOffer, onClose: () -> Unit, onSubmit: (String
                 Text("Size: $size", fontSize = 13.sp, color = p.muted)
                 Muted("Download location:")
                 Text(where, fontSize = 14.sp)
+                Text(storageLine(ctx), fontSize = 13.sp, color = p.muted)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = wifi, onCheckedChange = { wifi = it })
                     Text("Wi-Fi only", fontSize = 14.sp)
                     Checkbox(checked = retry, onCheckedChange = { retry = it })
                     Text("Retry", fontSize = 14.sp)
                 }
+                Text("Download speed limit: " + (if (SPEEDS[speedStep] == 0) "MAX" else if (SPEEDS[speedStep] >= 1024) "${SPEEDS[speedStep] / 1024} MB/s" else "${SPEEDS[speedStep]} KB/s"), fontSize = 13.sp)
+                androidx.compose.material3.Slider(
+                    value = speedStep.toFloat(), onValueChange = { speedStep = it.toInt().coerceIn(0, SPEEDS.lastIndex) },
+                    valueRange = 0f..SPEEDS.lastIndex.toFloat(), steps = SPEEDS.size - 2,
+                )
             }
         },
         confirmButton = {
             Row {
                 val n = name.trim().ifEmpty { o.name }
-                TextButton(onClick = { onSubmit(n, wifi, retry, false) }) { Text("ADD") }
+                TextButton(onClick = { onSubmit(n, wifi, retry, false, SPEEDS[speedStep]) }) { Text("ADD") }
                 TextButton(onClick = onClose) { Text("CANCEL") }
-                TextButton(onClick = { onSubmit(n, wifi, retry, true) }) { Text("START", fontWeight = FontWeight.Bold) }
+                TextButton(onClick = { onSubmit(n, wifi, retry, true, SPEEDS[speedStep]) }) { Text("START", fontWeight = FontWeight.Bold) }
             }
         },
     )
@@ -655,3 +714,13 @@ private fun BookmarkList(onOpen: (String) -> Unit, onClose: () -> Unit) {
         }
     }
 }
+
+/** Speed choices of the slider: 0 = maximum (last position). */
+private val SPEEDS = listOf(64, 128, 256, 512, 1024, 2048, 5120, 0)
+
+internal fun storageLine(ctx: Context): String = runCatching {
+    val st = android.os.StatFs(Environment.getExternalStorageDirectory().path)
+    val total = st.totalBytes
+    val free = st.availableBytes
+    "Storage: ${fmtSize(total - free)} / ${fmtSize(total)}, ${"%.1f".format(free * 100.0 / total)}% free"
+}.getOrDefault("")

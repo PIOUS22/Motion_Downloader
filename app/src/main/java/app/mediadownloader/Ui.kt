@@ -52,7 +52,7 @@ class Pal(
 
 private val LightPal = Pal(
     bg = Color(0xFFF5F6FA), surface = Color.White, text = Color(0xFF14162B), muted = Color(0xFF5B6078),
-    border = Color(0xFFE3E5EE), primary = Color(0xFF4F46E5), tint = Color(0xFFECEBFD), onTint = Color(0xFF4338CA),
+    border = Color(0xFFE3E5EE), primary = Color(0xFF5A32AE), tint = Color(0xFFE4DDF5), onTint = Color(0xFF5A32AE),
     soft = Color(0xFFF5F6FA), segBg = Color(0xFFE9EAF2),
     okBg = Color(0xFFE3F5EC), okFg = Color(0xFF0F7A47), errBg = Color(0xFFFDE8EA), errFg = Color(0xFFBF2433),
     warnBg = Color(0xFFFFF1D9), warnFg = Color(0xFF8A5200), scrim = Color(0x8C14162B),
@@ -60,7 +60,7 @@ private val LightPal = Pal(
 
 private val DarkPal = Pal(
     bg = Color(0xFF0F1018), surface = Color(0xFF1A1C28), text = Color(0xFFECEDF5), muted = Color(0xFFA3A8BD),
-    border = Color(0xFF2C2F40), primary = Color(0xFF6A62F2), tint = Color(0xFF26284C), onTint = Color(0xFFC3C0FF),
+    border = Color(0xFF2C2F40), primary = Color(0xFF7B52C4), tint = Color(0xFF2E2350), onTint = Color(0xFFD5C9F0),
     soft = Color(0xFF23253A), segBg = Color(0xFF23253A),
     okBg = Color(0xFF12301F), okFg = Color(0xFF6FD9A0), errBg = Color(0xFF3A1A1F), errFg = Color(0xFFFF8A94),
     warnBg = Color(0xFF3A2C10), warnFg = Color(0xFFF5C26B), scrim = Color(0xA0000000),
@@ -108,6 +108,9 @@ object Ic {
     val Home = stroke("M4 11 12 4l8 7 M6 10v10h12V10", 1.9f)
     val Settings = stroke("M4 7h10 M18 7h2 M14 7a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M4 17h2 M10 17h10 M6 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0", 1.9f)
     val Back = stroke("M15 5 8 12l7 7")
+    val Phone = stroke("M8 3h8v18H8z M11 18h2", 1.8f)
+    val Reel = stroke("M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M10 9a1 1 0 1 0 2 0a1 1 0 1 0 -2 0 M13 14a1 1 0 1 0 2 0a1 1 0 1 0 -2 0 M8 14a1 1 0 1 0 2 0a1 1 0 1 0 -2 0", 1.7f)
+    val FileIc = stroke("M7 3h7l4 4v14H7z M14 3v4h4", 1.8f)
     val Sort = stroke("M4 6h12 M4 12h8 M4 18h4 M18 7v11 M15 15l3 3 3-3", 2f)
     val Menu = stroke("M4 7h16 M4 12h16 M4 17h16", 2f)
     val Plus = stroke("M12 5v14 M5 12h14", 2.4f)
