@@ -96,8 +96,103 @@ object DownloadQueue {
         }
     }
 
+    /** Several connections: the file is cut in parts that download at the same time. Falls back to one connection. */
+    private fun runFileMulti(ctx: Context, item: DlItem, engine: Engine): DownloadResult? {
+        val parts = item.parts.coerceIn(2, 32)
+        // ask the server for the size and whether it can send pieces
+        val probe = java.net.URL(item.fileUrl).openConnection() as java.net.HttpURLConnection
+        probe.connectTimeout = 20000; probe.readTimeout = 30000
+        probe.setRequestProperty("Range", "bytes=0-0")
+        item.fileUa?.let { probe.setRequestProperty("User-Agent", it) }
+        item.fileCookie?.let { probe.setRequestProperty("Cookie", it) }
+        item.fileRef?.let { probe.setRequestProperty("Referer", it) }
+        val total = try {
+            if (probe.responseCode != 206) return null
+            probe.getHeaderField("Content-Range")?.substringAfter('/')?.toLongOrNull() ?: return null
+        } finally { probe.disconnect() }
+        if (total < 1_000_000L) return null
+        val stop = java.util.concurrent.atomic.AtomicBoolean(false)
+        fileStops[item.id] = stop
+        val dir = tmpDir(ctx, item.id).also { it.mkdirs() }
+        val name = item.fileName.ifBlank { "file" }
+        val chunk = (total + parts - 1) / parts
+        val files = (0 until parts).map { File(dir, "$name.p$it") }
+        val done = java.util.concurrent.atomic.AtomicLong(0)
+        val failed = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val limitKb = if (item.speedKb > 0) item.speedKb else AppPrefs.speedLimit(ctx)
+        val t0 = System.currentTimeMillis()
+        files.forEachIndexed { i, f -> done.addAndGet(minOf(f.length(), minOf(chunk, total - i * chunk).coerceAtLeast(0))) }
+        val base = done.get()
+        val threads = files.mapIndexed { i, f ->
+            Thread {
+                try {
+                    val start = i * chunk
+                    val end = minOf(total - 1, start + chunk - 1)
+                    var have = f.length()
+                    if (start + have > end) return@Thread
+                    val c = java.net.URL(item.fileUrl).openConnection() as java.net.HttpURLConnection
+                    c.connectTimeout = 20000; c.readTimeout = 30000
+                    c.setRequestProperty("Range", "bytes=${start + have}-$end")
+                    item.fileUa?.let { c.setRequestProperty("User-Agent", it) }
+                    item.fileCookie?.let { c.setRequestProperty("Cookie", it) }
+                    item.fileRef?.let { c.setRequestProperty("Referer", it) }
+                    if (c.responseCode != 206) { failed.set("The server answered HTTP ${c.responseCode}"); return@Thread }
+                    c.inputStream.use { input ->
+                        java.io.FileOutputStream(f, true).use { out ->
+                            val buf = ByteArray(64 * 1024)
+                            while (!stop.get() && failed.get() == null) {
+                                val n = input.read(buf)
+                                if (n < 0) break
+                                out.write(buf, 0, n)
+                                done.addAndGet(n.toLong())
+                                if (limitKb > 0) {
+                                    val allowed = (done.get() - base) * 1000L / (limitKb * 1024L)
+                                    val el = System.currentTimeMillis() - t0
+                                    if (allowed > el) Thread.sleep(minOf(allowed - el, 500L))
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Throwable) { if (!stop.get()) failed.compareAndSet(null, "Connection problem: ${e.message}") }
+            }.also { it.start() }
+        }
+        var lastBytes = done.get()
+        var lastT = System.currentTimeMillis()
+        var lastN = 0L
+        while (threads.any { it.isAlive }) {
+            Thread.sleep(700)
+            val now = System.currentTimeMillis()
+            val d = done.get()
+            val speed = (d - lastBytes) * 1000.0 / (now - lastT).coerceAtLeast(1)
+            lastBytes = d; lastT = now
+            val eta = if (speed > 1) ((total - d) / speed).toLong() else -1L
+            History.progress(item.id, minOf(99.9f, d * 100f / total), fmtSize(d) + " of " + fmtSize(total) + " \u00B7 ${fmtSize(speed.toLong())}/s" + (if (eta >= 0) " \u00B7 ${eta}s left" else ""))
+            if (now - lastN > 1000) { lastN = now; DownloadService.update(ctx, "Downloading: $name", (d * 100 / total).toInt()) }
+            if (AppPrefs.lowBattery(ctx) && userStop[item.id] == null) pause(ctx, item.id)
+        }
+        fileStops.remove(item.id)
+        if (stop.get()) {
+            if (userStop[item.id] != "pause") dir.deleteRecursively()
+            return DownloadResult(0, false, true, null)
+        }
+        val sizes = files.sumOf { it.length() }
+        if (failed.get() != null || sizes < total) return DownloadResult(0, false, false, failed.get() ?: "Connection lost", networkLost = item.retry)
+        val finalFile = File(dir, name)
+        finalFile.delete()
+        java.io.FileOutputStream(finalFile).use { out -> files.forEach { f -> f.inputStream().use { it.copyTo(out) }; f.delete() } }
+        val tree = prefs(ctx).getString("save_uri", null)?.let { Uri.parse(it) }
+        val saved = engine.saveFile(dir, tree)
+        dir.deleteRecursively()
+        return if (saved.count == 0) DownloadResult(0, false, false, "Could not save the file")
+        else DownloadResult(saved.count, false, false, null, saved.firstUri, saved.firstMime, saved.path)
+    }
+
     /** Direct file download (from the browser) with resume support. */
     private fun runFile(ctx: Context, item: DlItem, engine: Engine): DownloadResult {
+        if (item.parts > 1) {
+            val multi = try { runFileMulti(ctx, item, engine) } catch (e: Throwable) { null }
+            if (multi != null) return multi
+        }
         val stop = java.util.concurrent.atomic.AtomicBoolean(false)
         fileStops[item.id] = stop
         val dir = tmpDir(ctx, item.id).also { it.mkdirs() }
@@ -111,6 +206,7 @@ object DownloadQueue {
             conn.instanceFollowRedirects = true
             item.fileUa?.let { conn.setRequestProperty("User-Agent", it) }
             item.fileCookie?.let { conn.setRequestProperty("Cookie", it) }
+            item.fileRef?.let { conn.setRequestProperty("Referer", it) }
             if (have > 0) conn.setRequestProperty("Range", "bytes=$have-")
             val code = conn.responseCode
             if (code != 200 && code != 206) return DownloadResult(0, false, false, "The server answered HTTP $code")

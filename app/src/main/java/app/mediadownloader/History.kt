@@ -43,16 +43,19 @@ data class DlItem(
     val fileCookie: String? = null,
     val wifiOnly: Boolean = false,
     val retry: Boolean = true,
+    val parts: Int = 1,                 // number of connections for a file download
+    val fileRef: String? = null,        // referrer page of a file link
     val speedKb: Int = 0,               // per-download speed limit, 0 = use the Settings value
 )
 
 fun newFileJob(
     url: String, name: String, size: Long, ua: String?, cookie: String?, wifiOnly: Boolean, retry: Boolean, speedKb: Int = 0,
+    parts: Int = 1, ref: String? = null,
 ) = DlItem(
     id = java.util.UUID.randomUUID().toString(),
     title = name, platform = "Files", audio = false, status = "pending",
     url = url, label = (if (size > 0) fmtSize(size) else "File") + " \u00B7 File",
-    fileUrl = url, fileName = name, fileUa = ua, fileCookie = cookie, wifiOnly = wifiOnly, retry = retry, speedKb = speedKb,
+    fileUrl = url, fileName = name, fileUa = ua, fileCookie = cookie, wifiOnly = wifiOnly, retry = retry, speedKb = speedKb, parts = parts, fileRef = ref,
 )
 
 fun newJob(
@@ -179,7 +182,7 @@ object History {
         put("subsMode", i.subsMode); put("subsAuto", i.subsAuto); put("label", i.label)
         put("fileUrl", i.fileUrl ?: JSONObject.NULL); put("fileName", i.fileName)
         put("fileUa", i.fileUa ?: JSONObject.NULL); put("fileCookie", i.fileCookie ?: JSONObject.NULL)
-        put("wifiOnly", i.wifiOnly); put("retry", i.retry); put("speedKb", i.speedKb)
+        put("wifiOnly", i.wifiOnly); put("retry", i.retry); put("speedKb", i.speedKb); put("parts", i.parts); put("fileRef", i.fileRef ?: JSONObject.NULL)
     }
 
     private fun fromJson(o: JSONObject): DlItem {
@@ -203,7 +206,8 @@ object History {
             fileName = o.optString("fileName"),
             fileUa = if (o.isNull("fileUa")) null else o.optString("fileUa"),
             fileCookie = if (o.isNull("fileCookie")) null else o.optString("fileCookie"),
-            wifiOnly = o.optBoolean("wifiOnly"), retry = o.optBoolean("retry", true), speedKb = o.optInt("speedKb", 0),
+            wifiOnly = o.optBoolean("wifiOnly"), retry = o.optBoolean("retry", true), speedKb = o.optInt("speedKb", 0), parts = o.optInt("parts", 1),
+            fileRef = if (o.isNull("fileRef")) null else o.optString("fileRef"),
         )
     }
 }

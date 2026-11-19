@@ -70,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -870,15 +871,11 @@ private fun AddLinkDialog(vm: MainViewModel, s: UiState, onClose: () -> Unit) {
     )
 }
 
-private val TabAccent = Color(0xFFF4C15D)
-
 @Composable
 private fun IdmRow(d: DlItem, ctx: Context, fmt: java.text.SimpleDateFormat) {
-    val p = LocalPal.current
     var menu by remember { mutableStateOf(false) }
     val running = d.status == "active" || d.status == "paused" || d.status == "pending"
-    val icon = when (categoryOf(d)) { "Video", "Music" -> Ic.Reel; "Programs" -> Ic.Phone; "Photos" -> Ic.Image; else -> Ic.FileIc }
-    val shape = RoundedCornerShape(0.dp)
+    val icon = when (categoryOf(d)) { "Video", "Music" -> Ic.DReel; "Programs" -> Ic.DPhone; "Photos" -> Ic.Image; else -> Ic.FileIc }
     Box(
         Modifier.fillMaxWidth().background(if (running) Color.White else Color(0xFFE4E4E4))
             .clickable {
@@ -892,103 +889,138 @@ private fun IdmRow(d: DlItem, ctx: Context, fmt: java.text.SimpleDateFormat) {
     ) {
         if (d.status == "active" || d.status == "paused") {
             Box(Modifier.matchParentSize()) {
-                Box(Modifier.fillMaxWidth((d.progress / 100f).coerceIn(0f, 1f)).fillMaxHeight().background(p.tint))
+                Box(Modifier.fillMaxWidth((d.progress / 100f).coerceIn(0f, 1f)).fillMaxHeight().background(Idm.Tint))
             }
         }
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Ico(icon, 28.dp, p.muted)
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Ico(icon, 28.dp, Idm.Grey)
             Column(Modifier.weight(1f)) {
                 Row {
-                    Text(d.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(d.title, fontSize = 14.sp, color = Idm.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (d.fileUrl != null) {
-                        Text(" (Resume: ", fontSize = 14.sp, maxLines = 1)
-                        Text("Yes", fontSize = 14.sp, color = Color(0xFF6B7F1E), maxLines = 1)
-                        Text(")", fontSize = 14.sp, maxLines = 1)
+                        Text(" (Resume: ", fontSize = 14.sp, color = Idm.Text, maxLines = 1)
+                        Text("Yes", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Idm.Olive, maxLines = 1)
+                        Text(")", fontSize = 14.sp, color = Idm.Text, maxLines = 1)
                     }
                 }
-                val sub = when (d.status) {
+                val left = when (d.status) {
                     "done" -> "100% | ${d.label.ifBlank { d.platform }}"
                     "failed" -> d.error ?: "Download failed"
                     "cancelled" -> "Cancelled"
                     "pending" -> d.detail.ifBlank { "Pending \u00B7 in queue" }
-                    "paused" -> "Paused | ${d.progress.toInt()}%"
+                    "paused" -> "${d.progress.toInt()}% | Paused"
                     else -> "${d.progress.toInt()}% | ${d.detail.ifBlank { "Starting\u2026" }}"
                 }
-                Row {
-                    Text(sub, fontSize = 12.sp, color = if (d.status == "failed") p.errFg else p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    if (d.status == "done") Text("Completed  ${fmt.format(java.util.Date(d.time))}", fontSize = 12.sp, color = p.muted, maxLines = 1)
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(left, fontSize = 12.sp, color = if (d.status == "failed") Color(0xFFBF2433) else Idm.Grey, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (d.status == "done") Text("Completed  ${fmt.format(java.util.Date(d.time))}", fontSize = 12.sp, color = Idm.Grey, maxLines = 1)
                 }
             }
             when (d.status) {
-                "active" -> Box(Modifier.size(44.dp).clip(CircleShape).clickable { DownloadQueue.pause(ctx, d.id) }, contentAlignment = Alignment.Center) { Ico(Ic.Pause, 26.dp, p.text) }
-                "paused", "pending" -> Box(Modifier.size(44.dp).clip(CircleShape).clickable { if (d.status == "paused") DownloadQueue.resume(ctx, d.id) else DownloadQueue.cancel(ctx, d.id) }, contentAlignment = Alignment.Center) {
-                    Ico(if (d.status == "paused") Ic.Play else Ic.Close, 24.dp, p.text)
+                "active" -> Box(Modifier.size(30.dp).clickable { DownloadQueue.pause(ctx, d.id) }, contentAlignment = Alignment.Center) { Ico(Ic.DPauseCircle, 30.dp, Idm.Grey) }
+                "paused", "pending" -> Box(Modifier.size(30.dp).clickable { if (d.status == "paused") DownloadQueue.resume(ctx, d.id) else DownloadQueue.cancel(ctx, d.id) }, contentAlignment = Alignment.Center) {
+                    Ico(if (d.status == "paused") Ic.DPlayCircle else Ic.Close, 30.dp, Idm.Grey)
                 }
                 else -> Box {
-                    Box(Modifier.size(44.dp).clip(CircleShape).clickable { menu = true }, contentAlignment = Alignment.Center) { Ico(Ic.More, 22.dp, p.muted) }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        if (d.status == "done") DropdownMenuItem(text = { Text("Open") }, onClick = { menu = false; openDownloaded(ctx, d) })
-                        else DropdownMenuItem(text = { Text("Retry") }, onClick = { menu = false; DownloadQueue.retry(ctx, d.id) })
-                        DropdownMenuItem(text = { Text("Remove from list") }, onClick = { menu = false; History.remove(d.id) })
+                    Box(Modifier.size(30.dp).clickable { menu = true }, contentAlignment = Alignment.Center) { Ico(Ic.DDots, 22.dp, Idm.Grey) }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Color.White)) {
+                        if (d.status == "done") DropdownMenuItem(text = { Text("Open", color = Idm.Text) }, onClick = { menu = false; openDownloaded(ctx, d) })
+                        else DropdownMenuItem(text = { Text("Retry", color = Idm.Text) }, onClick = { menu = false; DownloadQueue.retry(ctx, d.id) })
+                        DropdownMenuItem(text = { Text("Remove from list", color = Idm.Text) }, onClick = { menu = false; History.remove(d.id) })
                     }
                 }
             }
         }
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp).background(Color(0xFFD0D0D0)))
     }
-    Box(Modifier.fillMaxWidth().height(1.dp).background(p.border))
 }
 
 @Composable
 private fun BatchDialog(onClose: () -> Unit) {
-    val p = LocalPal.current
     val ctx = LocalContext.current
     var link by remember { mutableStateOf("") }
+    var ref by remember { mutableStateOf("") }
+    var letters by remember { mutableStateOf(false) }
     var from by remember { mutableStateOf("0") }
-    var to by remember { mutableStateOf("10") }
+    var to by remember { mutableStateOf("100") }
     var digits by remember { mutableStateOf("1") }
+    var lFrom by remember { mutableStateOf("a") }
+    var lTo by remember { mutableStateOf("z") }
     var wifi by remember { mutableStateOf(AppPrefs.wifiOnly(ctx)) }
     var retry by remember { mutableStateOf(true) }
+    var dup by remember { mutableStateOf(false) }
+    var adv by remember { mutableStateOf(false) }
+    var speedKb by remember { mutableStateOf(0) }
+    var parts by remember { mutableStateOf(8) }
+    val where = if (AppPrefs.p(ctx).getString("save_uri", null) != null) "Your chosen folder / Files" else "Downloads/MotionDownloader/Files"
+    fun values(): List<String> =
+        if (letters) {
+            val a = lFrom.firstOrNull() ?: 'a'
+            val z = lTo.firstOrNull() ?: a
+            (a..z).map { it.toString() }.take(500)
+        } else {
+            val a = from.toIntOrNull() ?: 0
+            val z = (to.toIntOrNull() ?: a).coerceAtMost(a + 499)
+            val dg = digits.toIntOrNull()?.coerceIn(1, 8) ?: 1
+            (a..z).map { it.toString().padStart(dg, '0') }
+        }
     fun go(start: Boolean) {
         if (!link.contains('*')) { Toast.makeText(ctx, "Add a * in the link where the number goes", Toast.LENGTH_LONG).show(); return }
-        val a = from.toIntOrNull() ?: 0
-        val z = (to.toIntOrNull() ?: a).coerceAtMost(a + 499)
-        val dg = digits.toIntOrNull()?.coerceIn(1, 8) ?: 1
-        for (i in a..z) {
-            val url = link.trim().replace("*", i.toString().padStart(dg, '0'))
-            val name = url.substringBefore('?').substringAfterLast('/').ifBlank { "file$i" }
-            DownloadQueue.enqueue(ctx, newFileJob(url, name, -1L, null, null, wifi, retry), start)
+        val existing = History.items.value.mapNotNull { it.fileUrl }.toSet()
+        var n = 0
+        values().forEach { v ->
+            val url = link.trim().replace("*", v)
+            if (dup && url in existing) return@forEach
+            val name = url.substringBefore('?').substringAfterLast('/').ifBlank { "file$v" }
+            DownloadQueue.enqueue(ctx, newFileJob(url, name, -1L, null, null, wifi, retry, if (adv) speedKb else 0, if (adv) parts else 1, ref.trim().ifBlank { null }), start)
+            n++
         }
-        Toast.makeText(ctx, "${z - a + 1} links added", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, "$n links added", Toast.LENGTH_SHORT).show()
         onClose()
     }
-    AlertDialog(
-        onDismissRequest = onClose, containerColor = p.surface,
-        title = { Text("Batch download!", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Muted("Use the asterisk (*) wildcard for the file name pattern. For example: http://www.domain.com/images/img*.jpg")
-                OutlinedTextField(value = link, onValueChange = { link = it }, label = { Text("Download link") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = from, onValueChange = { from = it.filter(Char::isDigit) }, label = { Text("From") }, singleLine = true, modifier = Modifier.weight(1f))
-                    OutlinedTextField(value = to, onValueChange = { to = it.filter(Char::isDigit) }, label = { Text("To") }, singleLine = true, modifier = Modifier.weight(1f))
-                    OutlinedTextField(value = digits, onValueChange = { digits = it.filter(Char::isDigit) }, label = { Text("Digits") }, singleLine = true, modifier = Modifier.weight(1f))
-                }
-                Text(storageLine(ctx), fontSize = 13.sp, color = p.muted)
-                Text(if (link.contains('*')) "Up to 500 links at once" else "No wildcard(*) character in download link", fontSize = 13.sp, color = p.muted)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = wifi, onCheckedChange = { wifi = it }); Text("Wi-Fi only", fontSize = 14.sp)
-                    Checkbox(checked = retry, onCheckedChange = { retry = it }); Text("Retry", fontSize = 14.sp)
-                }
-            }
-        },
-        confirmButton = {
-            Row {
-                TextButton(onClick = { go(false) }) { Text("ADD") }
-                TextButton(onClick = onClose) { Text("CANCEL") }
-                TextButton(onClick = { go(true) }) { Text("START", fontWeight = FontWeight.Bold) }
-            }
-        },
-    )
+    IdmDialog(top = 60.dp, onDismiss = onClose) {
+        IdmTitle("Batch download!")
+        Text("Use the asterisk(*) wildcard for the file name pattern. For example: http://www.domain.com/images/img*.jpg", fontSize = 13.sp, color = Color(0xFF888888), modifier = Modifier.padding(top = 12.dp))
+        Box(Modifier.padding(top = 14.dp)) { IdmField(link, { link = it }, "Download link") }
+        IdmField(ref, { ref = it }, "Download/Referrer page link\nleave empty if not sure", Modifier.padding(top = 8.dp), 13)
+        Row(Modifier.fillMaxWidth().padding(top = 16.dp).clickable { letters = false }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(if (!letters) "\u25C9" else "\u25CB", fontSize = 14.sp, color = Color(0xFF666666))
+            Text("From:", fontSize = 13.sp, color = Color(0xFF666666))
+            Box(Modifier.width(48.dp)) { IdmField(from, { from = it.filter(Char::isDigit) }, "0", size = 13) }
+            Text("To:", fontSize = 13.sp, color = Color(0xFF666666))
+            Box(Modifier.width(48.dp)) { IdmField(to, { to = it.filter(Char::isDigit) }, "100", size = 13) }
+            Text("Digits:", fontSize = 13.sp, color = Color(0xFF666666))
+            Box(Modifier.width(32.dp)) { IdmField(digits, { digits = it.filter(Char::isDigit).take(1) }, "1", size = 13) }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp).clickable { letters = true }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(if (letters) "\u25C9" else "\u25CB", fontSize = 14.sp, color = Color(0xFF666666))
+            Text("From:", fontSize = 13.sp, color = Color(0xFF666666))
+            Box(Modifier.width(32.dp)) { IdmField(lFrom, { lFrom = it.take(1) }, "a", size = 13) }
+            Text("To:", fontSize = 13.sp, color = Color(0xFF666666))
+            Box(Modifier.width(32.dp)) { IdmField(lTo, { lTo = it.take(1) }, "z", size = 13) }
+            Text("case sensitive", fontSize = 13.sp, color = Color(0xFF999999))
+        }
+        Box(Modifier.padding(top = 8.dp)) { StorageText() }
+        Text(where, fontSize = 14.sp, color = Idm.Text, modifier = Modifier.padding(top = 8.dp))
+        Box(Modifier.fillMaxWidth().padding(top = 6.dp).height(1.dp).background(Color(0xFFCCCCCC)))
+        Box(Modifier.fillMaxWidth().padding(top = 12.dp).border(1.dp, Color(0xFFDDDDDD)).padding(10.dp)) {
+            val preview = if (link.contains('*')) values().firstOrNull()?.let { link.replace("*", it) } ?: "" else ""
+            Text(if (link.contains('*')) "${values().size} links  \u2192  $preview" else "No wildcard(*) character in download link", fontSize = 13.sp, color = Color(0xFF777777))
+        }
+        Column(Modifier.padding(top = 4.dp)) {
+            IdmCheck("Discard duplicate links", dup) { dup = it }
+            IdmCheck("Wifi only", wifi, Idm.Orange) { wifi = it }
+            IdmCheck("Retry", retry) { retry = it }
+            IdmCheck("Advance option", adv) { adv = it }
+        }
+        if (adv) {
+            Text("Number of parts: $parts", fontSize = 13.sp, color = Idm.Grey)
+            IdmSlider(parts.toFloat(), { parts = it.toInt().coerceIn(1, 32) }, 1f..32f, 30)
+            Text("Download speed limit: " + (if (speedKb == 0) "MAX" else "$speedKb KB/s"), fontSize = 13.sp, color = Idm.Grey)
+            IdmSlider(if (speedKb == 0) 2048f else speedKb.toFloat(), { speedKb = if (it >= 2040f) 0 else (it / 64).toInt().coerceAtLeast(1) * 64 }, 64f..2048f, 0)
+        }
+        IdmButtons("ADD", { go(false) }, onClose) { go(true) }
+    }
 }
 
 @Composable
@@ -996,7 +1028,6 @@ private fun DownloadsScreen(
     pad: PaddingValues, all: List<DlItem>, tab: String, onTab: (String) -> Unit, category: String,
     onMenu: () -> Unit, onBrowser: (() -> Unit)?, onAdd: () -> Unit, onSettings: () -> Unit = {},
 ) {
-    val p = LocalPal.current
     val ctx = LocalContext.current
     var searching by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
@@ -1018,56 +1049,57 @@ private fun DownloadsScreen(
     val fmt = remember { java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault()) }
     if (batch) BatchDialog { batch = false }
 
-    Box(Modifier.fillMaxSize().background(p.surface).padding(pad)) {
+    Box(Modifier.fillMaxSize().background(Color.White).padding(bottom = pad.calculateBottomPadding())) {
         Column(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxWidth().background(Color(0xFF5A32AE)).statusBarsPadding()) {
-                Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onMenu), contentAlignment = Alignment.Center) { Ico(Ic.Menu, 24.dp, Color.White) }
+            Column(Modifier.fillMaxWidth().background(Idm.Purple).statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Box(Modifier.clickable(role = Role.Button, onClick = onMenu)) { Ico(Ic.DMenu, 24.dp, Color.White) }
                     if (searching) {
                         BasicTextField(
                             value = query, onValueChange = { query = it }, singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, color = Color.White),
                             cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                            decorationBox = { inner -> Box { if (query.isEmpty()) Text("Search downloads", color = Color(0xFFD5C9F0), fontSize = 17.sp); inner() } },
+                            modifier = Modifier.weight(1f).padding(start = 8.dp),
+                            decorationBox = { inner -> Box { if (query.isEmpty()) Text("Search downloads", color = Idm.Tab, fontSize = 17.sp); inner() } },
                         )
                     } else {
                         Text(
-                            if (category == "all") "Motion Downloader" else category, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                            if (category == "all") "Motion Downloader" else category, fontSize = 19.sp, fontWeight = FontWeight.Bold,
                             color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp),
                         )
                     }
-                    Box(Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button) { searching = !searching; if (!searching) query = "" }, contentAlignment = Alignment.Center) {
-                        Ico(if (searching) Ic.Close else Ic.Search, 22.dp, Color.White)
-                    }
+                    Box(Modifier.clickable(role = Role.Button) { searching = !searching; if (!searching) query = "" }) { Ico(if (searching) Ic.Close else Ic.DSearch, 22.dp, Color.White) }
                     Box {
-                        Box(Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button) { sortMenu = true }, contentAlignment = Alignment.Center) { Ico(Ic.Sort, 22.dp, Color.White) }
-                        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                        Box(Modifier.clickable(role = Role.Button) { sortMenu = true }) { Ico(Ic.DSort, 22.dp, Color.White) }
+                        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }, modifier = Modifier.background(Color.White)) {
                             listOf("new" to "Newest first", "old" to "Oldest first", "name" to "Name (A\u2013Z)").forEach { (k, l) ->
-                                DropdownMenuItem(text = { Text(l, fontWeight = if (sort == k) FontWeight.Bold else FontWeight.Normal) }, onClick = { sort = k; sortMenu = false })
+                                DropdownMenuItem(text = { Text(l, color = Idm.Text, fontWeight = if (sort == k) FontWeight.Bold else FontWeight.Normal) }, onClick = { sort = k; sortMenu = false })
                             }
                         }
                     }
-                    if (onBrowser != null) Box(Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onBrowser), contentAlignment = Alignment.Center) { Ico(Ic.Globe, 22.dp, Color.White) }
+                    if (onBrowser != null) Box(Modifier.clickable(role = Role.Button, onClick = onBrowser)) { Ico(Ic.DGlobe, 22.dp, Color.White) }
+                    Box(Modifier.clickable(role = Role.Button) { batch = true }) { Ico(Ic.DMagnet, 22.dp, Color.White) }
                     Box {
-                        Box(Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button) { moreMenu = true }, contentAlignment = Alignment.Center) { Ico(Ic.More, 22.dp, Color.White) }
-                        DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
-                            DropdownMenuItem(text = { Text("Batch download") }, onClick = { moreMenu = false; batch = true })
-                            DropdownMenuItem(text = { Text("Clear finished") }, onClick = { moreMenu = false; History.clearFinished() })
-                            DropdownMenuItem(text = { Text("Settings") }, onClick = { moreMenu = false; onSettings() })
+                        Box(Modifier.clickable(role = Role.Button) { moreMenu = true }) { Ico(Ic.DDots, 22.dp, Color.White) }
+                        DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }, modifier = Modifier.background(Color.White)) {
+                            DropdownMenuItem(text = { Text("Batch download", color = Idm.Text) }, onClick = { moreMenu = false; batch = true })
+                            DropdownMenuItem(text = { Text("Clear finished", color = Idm.Text) }, onClick = { moreMenu = false; History.clearFinished() })
+                            DropdownMenuItem(text = { Text("Settings", color = Idm.Text) }, onClick = { moreMenu = false; onSettings() })
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                     listOf(
                         Triple("all", "ALL", everything.size), Triple("downloading", "DOWNLOADING", running.size),
                         Triple("finished", "FINISHED", finished.size), Triple("error", "ERROR", errors.size),
                     ).forEach { (k, l, n) ->
                         val sel = tab == k
-                        Column(Modifier.clickable(role = Role.Tab) { onTab(k) }.padding(horizontal = 4.dp)) {
-                            Text("${tr(l.lowercase().replaceFirstChar { it.uppercase() }).uppercase()} ($n)", fontSize = 13.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                color = if (sel) Color.White else Color(0xFFD5C9F0), maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp))
-                            Box(Modifier.fillMaxWidth().height(3.dp).background(if (sel) TabAccent else Color.Transparent))
+                        Column(Modifier.clickable(role = Role.Tab) { onTab(k) }) {
+                            Text(
+                                "${tr(l.lowercase().replaceFirstChar { it.uppercase() }).uppercase()} ($n)", fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                                color = if (sel) Color.White else Idm.Tab, maxLines = 1, modifier = Modifier.padding(vertical = 12.dp),
+                            )
+                            Box(Modifier.fillMaxWidth().height(3.dp).background(if (sel) Idm.Accent else Color.Transparent))
                         }
                     }
                 }
@@ -1075,7 +1107,7 @@ private fun DownloadsScreen(
             if (shown.isEmpty()) {
                 Text(
                     if (query.isNotBlank()) "No matches." else "Nothing here yet. Tap + to add a link.",
-                    color = p.muted, fontSize = 14.sp, modifier = Modifier.padding(24.dp),
+                    color = Idm.Grey, fontSize = 14.sp, modifier = Modifier.padding(24.dp),
                 )
             }
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(bottom = 96.dp)) {
@@ -1083,10 +1115,10 @@ private fun DownloadsScreen(
             }
         }
         Box(
-            Modifier.align(Alignment.BottomEnd).padding(20.dp).size(56.dp).clip(CircleShape)
-                .background(Color(0xFF7B52C4)).clickable(role = Role.Button, onClick = onAdd),
+            Modifier.align(Alignment.BottomEnd).padding(20.dp).size(56.dp).shadow(4.dp, CircleShape).clip(CircleShape)
+                .background(Idm.Purple2).clickable(role = Role.Button, onClick = onAdd),
             contentAlignment = Alignment.Center,
-        ) { Ico(Ic.Plus, 26.dp, Color.White) }
+        ) { Ico(Ic.DPlus, 28.dp, Color.White) }
     }
 }
 

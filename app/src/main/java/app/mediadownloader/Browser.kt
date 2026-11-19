@@ -1,6 +1,11 @@
 package app.mediadownloader
 
 import android.annotation.SuppressLint
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
@@ -363,104 +368,106 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
         tab.hasVideo = false
     }
     b.offer?.let { o ->
-        FileOfferDialog(o, onClose = { b.offer = null }) { name, wifi, retry, start, speed ->
+        FileOfferDialog(o, onClose = { b.offer = null }) { name, wifi, retry, start, speed, parts ->
             val cookie = CookieManager.getInstance().getCookie(o.url)
-            DownloadQueue.enqueue(ctx, newFileJob(o.url, name, o.length, o.ua, cookie, wifi, retry, speed), start)
+            DownloadQueue.enqueue(ctx, newFileJob(o.url, name, o.length, o.ua, cookie, wifi, retry, speed, parts), start)
             Toast.makeText(ctx, if (start) "Download started" else "Added to Downloads (press Resume to start)", Toast.LENGTH_SHORT).show()
             b.offer = null
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(pad)) {
+    Column(Modifier.fillMaxSize().padding(bottom = pad.calculateBottomPadding())) {
         Row(
-            Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            Modifier.fillMaxWidth().background(Color.White).statusBarsPadding().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // tab count (like Chrome)
+            // tab count: square with the number
             Box(
-                Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
-                    .background(if (b.showTabs) p.tint else p.soft)
-                    .border(2.dp, if (b.showTabs) p.primary else p.text, RoundedCornerShape(10.dp))
+                Modifier.size(34.dp).border(2.dp, if (b.showTabs) Idm.Purple else Color(0xFF777777), RoundedCornerShape(4.dp))
                     .clickable(role = Role.Button) { b.showHistory = false; b.showTabs = !b.showTabs },
                 contentAlignment = Alignment.Center,
-            ) { Text(b.tabs.size.toString(), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (b.showTabs) p.onTint else p.text) }
-            OutlinedTextField(
-                value = field, onValueChange = { field = it },
-                modifier = Modifier.weight(1f).onFocusChanged { editing = it.isFocused },
-                placeholder = { Text("Search or type a link") }, singleLine = true, shape = RoundedCornerShape(24.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                keyboardActions = KeyboardActions(onGo = { b.showHistory = false; b.showTabs = false; tab.go(field); focus.clearFocus() }),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFFEEEEEE), unfocusedContainerColor = Color(0xFFEEEEEE),
-                    focusedBorderColor = p.primary, unfocusedBorderColor = Color.Transparent,
-                ),
-            )
+            ) { Text(b.tabs.size.toString(), fontSize = 14.sp, color = Idm.Grey) }
+            // address field (grey pill)
             Box(
-                Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button) {
+                Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(22.dp)).background(Color(0xFFEEEEEE)).padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (field.isEmpty()) Text("Search", fontSize = 15.sp, color = Color(0xFF666666))
+                androidx.compose.foundation.text.BasicTextField(
+                    value = field, onValueChange = { field = it }, singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = Color(0xFF444444)),
+                    modifier = Modifier.fillMaxWidth().onFocusChanged { editing = it.isFocused },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                    keyboardActions = KeyboardActions(onGo = { b.showHistory = false; b.showTabs = false; tab.go(field); focus.clearFocus() }),
+                )
+            }
+            Box(
+                Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) {
                     if (tab.found.isNotEmpty()) b.showFound = true
                     else Toast.makeText(ctx, "No files detected on this page yet", Toast.LENGTH_SHORT).show()
                 },
                 contentAlignment = Alignment.Center,
-            ) { Ico(Ic.Download, 24.dp, p.text) }
-            // three-dot menu
+            ) { Ico(Ic.DDownArrow, 24.dp, Idm.Grey) }
             Box {
-                RoundIconButton(Ic.More, "Menu", p.soft, p.text) { menu = true }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    @Composable fun item(label: String, enabled: Boolean = true, check: Boolean? = null, action: () -> Unit) =
+                Box(Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) { menu = true }, contentAlignment = Alignment.Center) { Ico(Ic.DDots, 22.dp, Idm.Grey) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.width(260.dp).background(Color.White)) {
+                    @Composable fun item(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, enabled: Boolean = true, check: Boolean? = null, action: () -> Unit) =
                         DropdownMenuItem(
-                            text = { Text(label) }, enabled = enabled,
+                            text = { Text(label, fontSize = 14.sp, color = Idm.Text) }, enabled = enabled,
+                            leadingIcon = { Ico(icon, 22.dp, Idm.Grey) },
                             trailingIcon = if (check != null) ({
-                                Box(Modifier.size(22.dp).border(2.dp, Color(0xFF5A32AE), RoundedCornerShape(3.dp)).background(if (check) Color(0xFF5A32AE) else Color.Transparent))
+                                Box(Modifier.size(20.dp).border(2.dp, Idm.Purple, RoundedCornerShape(3.dp)).background(if (check) Idm.Purple else Color.White))
                             }) else null,
                             onClick = { menu = false; action() },
                         )
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        TextButton(onClick = { menu = false; if (tab.web.canGoBack()) tab.web.goBack() }, enabled = tab.canBack) { Text("\u2190") }
-                        TextButton(onClick = { menu = false; tab.web.goForward() }, enabled = tab.canForward) { Text("\u2192") }
-                        TextButton(onClick = {
+                    Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceAround) {
+                        Box(Modifier.size(32.dp).clickable { menu = false; if (tab.web.canGoBack()) tab.web.goBack() }, contentAlignment = Alignment.Center) { Ico(Ic.DArrowL, 22.dp, if (tab.canBack) Idm.Grey else Color(0xFFBBBBBB)) }
+                        Box(Modifier.size(32.dp).clickable { menu = false; tab.web.goForward() }, contentAlignment = Alignment.Center) { Ico(Ic.DArrowR, 22.dp, if (tab.canForward) Idm.Grey else Color(0xFFBBBBBB)) }
+                        Box(Modifier.size(32.dp).clickable {
                             menu = false
                             if (tab.isPage()) { val a = Bookmarks.toggle(tab.url, tab.title); Toast.makeText(ctx, if (a) "Bookmark added" else "Bookmark removed", Toast.LENGTH_SHORT).show() }
-                        }, enabled = tab.isPage()) { Text(if (Bookmarks.has(tab.url)) "\u2605" else "\u2606") }
-                        TextButton(onClick = { menu = false; if (tab.started) tab.web.reload() }) { Text("\u21BB") }
+                        }, contentAlignment = Alignment.Center) { Ico(Ic.DStar, 22.dp, if (Bookmarks.has(tab.url)) Idm.Purple else Idm.Grey) }
+                        Box(Modifier.size(32.dp).clickable { menu = false; if (tab.started) tab.web.reload() }, contentAlignment = Alignment.Center) { Ico(Ic.Retry, 22.dp, Idm.Grey) }
+                        Box(Modifier.size(32.dp).clickable { menu = false; tab.applyDark(!tab.dark) }, contentAlignment = Alignment.Center) { Ico(Ic.DSun, 22.dp, Idm.Grey) }
+                        Box(Modifier.size(32.dp).clickable { menu = false; b.showTabs = false; b.showBookmarks = false; b.showHistory = true }, contentAlignment = Alignment.Center) { Ico(Ic.DSort, 22.dp, Idm.Grey) }
                     }
-                    item("New tab") { b.addTab() }
-                    item("Clone tab", tab.isPage()) { b.cloneTab() }
-                    item("Find in page", tab.isPage()) { b.showFind = true }
-                    item("Copy link", tab.isPage()) {
+                    item("New tab", Ic.DPlus) { b.addTab() }
+                    item("Clone tab", Ic.Copy, tab.isPage()) { b.cloneTab() }
+                    item("Detected files (${tab.found.size})", Ic.DReel, tab.found.isNotEmpty()) { b.showFound = true }
+                    item("Find in Page", Ic.DSearch, tab.isPage()) { b.showFind = true }
+                    item("Copy link", Ic.Copy, tab.isPage()) {
                         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("link", tab.url))
                         Toast.makeText(ctx, "Link copied", Toast.LENGTH_SHORT).show()
                     }
-                    item("Copy all tab links") {
+                    item("Copy all tab links", Ic.Copy) {
                         val all = b.tabs.filter { it.isPage() }.joinToString("\n") { it.url }
                         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("links", all))
                         Toast.makeText(ctx, "Links copied", Toast.LENGTH_SHORT).show()
                     }
-                    item("Share link", tab.isPage()) {
+                    item("Bookmarks", Ic.DStar) { b.showTabs = false; b.showHistory = false; b.showBookmarks = true }
+                    item("Share link", Ic.Link, tab.isPage()) {
                         val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, tab.url)
                         runCatching { ctx.startActivity(Intent.createChooser(send, "Share link").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                     }
-                    item("Open tabs for links in clipboard") {
+                    item("Open tabs for links in clipboard", Ic.Paste) {
                         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         val txt = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString() ?: ""
                         val links = Regex("https?://\\S+").findAll(txt).map { it.value }.take(10).toList()
                         if (links.isEmpty()) Toast.makeText(ctx, "No links in the clipboard", Toast.LENGTH_SHORT).show()
                         links.forEach { b.addTab(); b.cur.go(it) }
                     }
-                    item("Detected files (${tab.found.size})", tab.found.isNotEmpty()) { b.showFound = true }
-                    item("Bookmarks") { b.showTabs = false; b.showHistory = false; b.showBookmarks = true }
-                    item("History") { b.showTabs = false; b.showBookmarks = false; b.showHistory = true }
-                    item("Dark mode", true, tab.dark) { tab.applyDark(!tab.dark) }
-                    item("Request desktop site", tab.started, tab.desktop) { tab.applyDesktop(!tab.desktop) }
-                    item("Enable JavaScript", true, tab.js) { tab.applyJs(!tab.js) }
-                    item("Block ads", true, BrowserSettings.blockAds) { BrowserSettings.blockAds = !BrowserSettings.blockAds; if (tab.started) tab.web.reload() }
-                    item("View page source", tab.isPage()) {
+                    item("Dark mode", Ic.DSun, true, tab.dark) { tab.applyDark(!tab.dark) }
+                    item("Request desktop site", Ic.Globe, tab.started, tab.desktop) { tab.applyDesktop(!tab.desktop) }
+                    item("Enable JavaScript", Ic.FileIc, true, tab.js) { tab.applyJs(!tab.js) }
+                    item("Block ads", Ic.Close, true, BrowserSettings.blockAds) { BrowserSettings.blockAds = !BrowserSettings.blockAds; if (tab.started) tab.web.reload() }
+                    item("View page source", Ic.FileIc, tab.isPage()) {
                         tab.web.evaluateJavascript("document.documentElement.outerHTML") { r ->
                             b.sourceText = runCatching { (org.json.JSONTokener(r).nextValue() as? String) ?: r }.getOrDefault(r ?: "").take(60000)
                         }
                     }
-                    item("Clear browsing data") {
+                    item("Clear browsing data", Ic.Trash) {
                         BrowserHistory.clear()
                         CookieManager.getInstance().removeAllCookies(null)
                         android.webkit.WebStorage.getInstance().deleteAllData()
@@ -468,12 +475,13 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
                         tab.web.clearFormData()
                         Toast.makeText(ctx, "Browsing data cleared", Toast.LENGTH_SHORT).show()
                     }
-                    item("Start page") { b.showHistory = false; b.showBookmarks = false; tab.showStartPage(); field = "" }
-                    item("Close tab") { b.closeTab(b.index) }
-                    item("Exit browser") { onExit() }
+                    item("Start page", Ic.Home) { b.showHistory = false; b.showBookmarks = false; tab.showStartPage(); field = "" }
+                    item("Close tab", Ic.Close) { b.closeTab(b.index) }
+                    item("Exit browser", Ic.Back) { onExit() }
                 }
             }
         }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFDDDDDD)))
         if (tab.started && tab.progress in 1..99) {
             Box(Modifier.fillMaxWidth().height(3.dp).background(p.border)) {
                 Box(Modifier.fillMaxWidth(tab.progress / 100f).height(3.dp).background(p.primary))
@@ -493,32 +501,43 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
             }
         }
         if (b.showFound) {
-            AlertDialog(
-                onDismissRequest = { b.showFound = false }, containerColor = p.surface,
-                title = { Text("File(s) detected!", fontWeight = FontWeight.Bold) },
-                text = {
-                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Muted("Tap a file to download it")
-                        tab.found.toList().forEach { f ->
-                            Row(
-                                Modifier.fillMaxWidth().clickable {
-                                    b.showFound = false
-                                    b.offer = FileOffer(f.url, tab.web.settings.userAgentString, null, -1L, f.name)
-                                }.padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Ico(Ic.Reel, 30.dp, p.muted)
-                                Column(Modifier.weight(1f)) {
-                                    Text(f.url, fontSize = 11.sp, color = p.muted, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                    Text(f.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-                                }
-                            }
-                        }
+            IdmDialog(top = 28.dp, onDismiss = { b.showFound = false }) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("File(s) detected!", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF444444))
+                    Ico(Ic.DSort, 24.dp, Idm.Grey)
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Select any file to download", fontSize = 14.sp, color = Color(0xFF666666))
+                    Box(Modifier.background(Idm.Purple).clickable { tab.found.clear(); b.showFound = false }.padding(horizontal = 18.dp, vertical = 8.dp)) {
+                        Text("RESET", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                     }
-                },
-                confirmButton = { TextButton(onClick = { b.showFound = false }) { Text("CLOSE") } },
-                dismissButton = { TextButton(onClick = { tab.found.clear(); b.showFound = false }) { Text("CLEAR ALL") } },
-            )
+                }
+                Box(Modifier.fillMaxWidth().padding(top = 10.dp).height(1.dp).background(Color(0xFFDDDDDD)))
+                tab.found.toList().forEach { f ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            b.showFound = false
+                            b.offer = FileOffer(f.url, tab.web.settings.userAgentString, null, -1L, f.name)
+                        }.padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(Modifier.width(64.dp), horizontalAlignment = Alignment.CenterHorizontally) { Ico(Ic.DReel, 32.dp, Idm.Grey) }
+                        Column(Modifier.weight(1f)) {
+                            Text(f.url, fontSize = 12.sp, color = Color(0xFF777777), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            Text(f.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Idm.Grey, maxLines = 2)
+                        }
+                        Ico(Ic.DDots, 20.dp, Idm.Grey)
+                    }
+                }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFDDDDDD)))
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("CLEAR ALL", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Idm.Purple, modifier = Modifier.clickable { tab.found.clear(); b.showFound = false })
+                    Text("SORT", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Idm.Purple, modifier = Modifier.clickable {
+                        val s = tab.found.sortedBy { it.name.lowercase() }; tab.found.clear(); tab.found.addAll(s)
+                    })
+                    Text("CLOSE", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Idm.Purple, modifier = Modifier.clickable { b.showFound = false })
+                }
+            }
         }
         b.sourceText?.let { src ->
             AlertDialog(
@@ -536,22 +555,27 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onExit: () -> Unit = {},
             } else if (b.showHistory) {
                 HistoryList(onOpen = { u -> b.showHistory = false; tab.go(u) }, onClose = { b.showHistory = false })
             } else if (!tab.started) {
-                Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Spacer(Modifier.height(48.dp))
-                    Text("Browse anything", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Column(Modifier.fillMaxSize().background(Color(0xFFF4F4F4)).padding(top = 140.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Motion", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4285F4), letterSpacing = (-2).sp)
+                    Text("Downloader", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Idm.Purple, letterSpacing = (-1).sp)
                     var q by remember { mutableStateOf("") }
-                    OutlinedTextField(
-                        value = q, onValueChange = { q = it }, modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Search\u2026") }, singleLine = true, shape = RoundedCornerShape(28.dp),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { tab.go(q); focus.clearFocus() }),
-                        colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = p.surface, unfocusedContainerColor = p.surface, focusedBorderColor = p.primary, unfocusedBorderColor = p.border),
-                    )
-                    Text(
-                        "Open a video page, then tap the small download button to save it. File links (PDF, APK, ZIP …) download directly.",
-                        fontSize = 15.sp, color = p.muted,
-                    )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.padding(top = 28.dp).width(330.dp).height(52.dp).shadow(3.dp, RoundedCornerShape(26.dp)).background(Color.White, RoundedCornerShape(26.dp)).padding(horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            if (q.isEmpty()) Text("Search\u2026", fontSize = 15.sp, color = Color(0xFF777777))
+                            androidx.compose.foundation.text.BasicTextField(
+                                value = q, onValueChange = { q = it }, singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = Idm.Text),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(onSearch = { tab.go(q); focus.clearFocus() }),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        Ico(Ic.DSearch, 22.dp, Idm.Grey)
+                    }
+                    FlowRow(Modifier.padding(horizontal = 24.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SHORTCUTS.forEach { (n, u) -> TintChip(n, false) { tab.go(u) } }
                     }
                 }
@@ -617,109 +641,45 @@ private fun TabList(b: BrowserHolder) {
 }
 
 @Composable
-private fun FileOfferDialog(o: FileOffer, onClose: () -> Unit, onSubmit: (String, Boolean, Boolean, Boolean, Int) -> Unit) {
-    val p = LocalPal.current
+private fun FileOfferDialog(o: FileOffer, onClose: () -> Unit, onSubmit: (String, Boolean, Boolean, Boolean, Int, Int) -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var name by remember { mutableStateOf(o.name) }
     var wifi by remember { mutableStateOf(AppPrefs.wifiOnly(ctx)) }
     var retry by remember { mutableStateOf(true) }
+    var advanced by remember { mutableStateOf(true) }
     var speedStep by remember { mutableIntStateOf(SPEEDS.lastIndex) }
-    val where = if (AppPrefs.p(ctx).getString("save_uri", null) != null) "Your chosen folder / Files"
-    else "Downloads/MotionDownloader/Files"
-    val size = if (o.length > 0) "${fmtSize(o.length)} (${o.length} bytes)" else "Unknown"
-    AlertDialog(
-        onDismissRequest = onClose, containerColor = p.surface,
-        title = { Text("Download file!", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Muted("Link")
-                Text(o.url, fontSize = 13.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                Muted("Save as")
-                OutlinedTextField(
-                    value = name, onValueChange = { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    trailingIcon = { Text(name.substringAfterLast('.', "").lowercase(), color = Color(0xFFE8622A), fontWeight = FontWeight.Bold, fontSize = 13.sp) },
-                )
-                Text("Size: $size", fontSize = 13.sp, color = p.muted)
-                Muted("Download location:")
-                Text(where, fontSize = 14.sp)
-                Text(storageLine(ctx), fontSize = 13.sp, color = p.muted)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = wifi, onCheckedChange = { wifi = it })
-                    Text("Wi-Fi only", fontSize = 14.sp)
-                    Checkbox(checked = retry, onCheckedChange = { retry = it })
-                    Text("Retry", fontSize = 14.sp)
-                }
-                Text("Download speed limit: " + (if (SPEEDS[speedStep] == 0) "MAX" else if (SPEEDS[speedStep] >= 1024) "${SPEEDS[speedStep] / 1024} MB/s" else "${SPEEDS[speedStep]} KB/s"), fontSize = 13.sp)
-                androidx.compose.material3.Slider(
-                    value = speedStep.toFloat(), onValueChange = { speedStep = it.toInt().coerceIn(0, SPEEDS.lastIndex) },
-                    valueRange = 0f..SPEEDS.lastIndex.toFloat(), steps = SPEEDS.size - 2,
-                )
-            }
-        },
-        confirmButton = {
-            Row {
-                val n = name.trim().ifEmpty { o.name }
-                TextButton(onClick = { onSubmit(n, wifi, retry, false, SPEEDS[speedStep]) }) { Text("ADD") }
-                TextButton(onClick = onClose) { Text("CANCEL") }
-                TextButton(onClick = { onSubmit(n, wifi, retry, true, SPEEDS[speedStep]) }) { Text("START", fontWeight = FontWeight.Bold) }
-            }
-        },
-    )
-}
-
-@Composable
-private fun HistoryList(onOpen: (String) -> Unit, onClose: () -> Unit) {
-    val p = LocalPal.current
-    val list by BrowserHistory.items.collectAsState()
-    val fmt = remember { java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault()) }
-    Column(Modifier.fillMaxSize().background(p.bg)) {
-        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp).height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("History", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            if (list.isNotEmpty()) TextButton(onClick = { BrowserHistory.clear() }) { Text("Clear all") }
-            TextButton(onClick = onClose) { Text("Close") }
+    var parts by remember { mutableIntStateOf(8) }
+    val where = if (AppPrefs.p(ctx).getString("save_uri", null) != null) "Your chosen folder / Files" else "Downloads/MotionDownloader/Files"
+    val size = if (o.length > 0) "${fmtSize(o.length)} (${o.length} bytes)" else "Unknown size"
+    IdmDialog(top = 40.dp, onDismiss = onClose) {
+        IdmTitle("Download file!")
+        Text("Link (Resume: N/A)", fontSize = 13.sp, color = Color(0xFF888888), modifier = Modifier.padding(top = 14.dp))
+        Text(o.url, fontSize = 12.sp, color = Color(0xFF999999), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+        IdmField(name.substringBeforeLast('.', name), { name = it + (if (name.contains('.')) "." + name.substringAfterLast('.') else "") }, "File name", Modifier.padding(top = 10.dp), 15) {
+            Text(name.substringAfterLast('.', "").lowercase(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Idm.Orange, modifier = Modifier.padding(start = 16.dp))
         }
-        if (list.isEmpty()) Text("No pages yet. Pages you open will be listed here.", color = p.muted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp))
-        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-            items(list, key = { it.url }) { v ->
-                Row(
-                    Modifier.fillMaxWidth().clickable { onOpen(v.url) }.padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(v.title.ifBlank { Urls.host(v.url).ifBlank { v.url } }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        Muted(v.url, maxLines = 1)
-                        Muted(fmt.format(java.util.Date(v.time)))
-                    }
-                    RoundIconButton(Ic.Close, "Remove", p.soft, p.text) { BrowserHistory.remove(v.url) }
-                }
-            }
+        Text(size, fontSize = 13.sp, color = Color(0xFF666666), modifier = Modifier.padding(top = 12.dp))
+        StorageText()
+        Text(where, fontSize = 14.sp, color = Idm.Text, modifier = Modifier.padding(top = 12.dp))
+        Box(Modifier.fillMaxWidth().padding(top = 6.dp).height(1.dp).background(Color(0xFFCCCCCC)))
+        Column(Modifier.padding(top = 4.dp)) {
+            IdmCheck("Wifi only", wifi, Idm.Orange) { wifi = it }
+            IdmCheck("Retry", retry) { retry = it }
+            IdmCheck("Advance option", advanced) { advanced = it }
         }
-    }
-}
-
-@Composable
-private fun BookmarkList(onOpen: (String) -> Unit, onClose: () -> Unit) {
-    val p = LocalPal.current
-    val list by Bookmarks.items.collectAsState()
-    Column(Modifier.fillMaxSize().background(p.bg)) {
-        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp).height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Bookmarks", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            TextButton(onClick = onClose) { Text("Close") }
+        if (advanced) {
+            Text(buildAnnotatedString { append("Number of parts: "); pushStyle(SpanStyle(fontWeight = FontWeight.Bold)); append(parts.toString()); pop() }, fontSize = 13.sp, color = Idm.Grey, modifier = Modifier.padding(top = 10.dp))
+            IdmSlider(parts.toFloat(), { parts = it.toInt().coerceIn(1, 32) }, 1f..32f, 30)
+            val sp = SPEEDS[speedStep]
+            Text(buildAnnotatedString {
+                append("Download speed limit: "); pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                append(if (sp == 0) "MAX" else if (sp >= 1024) "${sp / 1024} MB/s" else "$sp KB/s"); pop()
+            }, fontSize = 13.sp, color = Idm.Grey, modifier = Modifier.padding(top = 4.dp))
+            IdmSlider(speedStep.toFloat(), { speedStep = it.toInt().coerceIn(0, SPEEDS.lastIndex) }, 0f..SPEEDS.lastIndex.toFloat(), SPEEDS.size - 2)
         }
-        if (list.isEmpty()) Text("No bookmarks yet. Use the star in the menu to save a page.", color = p.muted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp))
-        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-            items(list, key = { it.url }) { v ->
-                Row(
-                    Modifier.fillMaxWidth().clickable { onOpen(v.url) }.padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(v.title.ifBlank { Urls.host(v.url).ifBlank { v.url } }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        Muted(v.url, maxLines = 1)
-                    }
-                    RoundIconButton(Ic.Close, "Remove", p.soft, p.text) { Bookmarks.remove(v.url) }
-                }
-            }
+        val n = name.trim().ifEmpty { o.name }
+        IdmButtons("ADD", { onSubmit(n, wifi, retry, false, if (advanced) SPEEDS[speedStep] else 0, if (advanced) parts else 1) }, onClose) {
+            onSubmit(n, wifi, retry, true, if (advanced) SPEEDS[speedStep] else 0, if (advanced) parts else 1)
         }
     }
 }
