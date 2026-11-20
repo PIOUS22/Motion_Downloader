@@ -327,7 +327,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                     .border(2.dp, if (b.showTabs) p.primary else p.text, RoundedCornerShape(10.dp))
                     .clickable(role = Role.Button) { b.showHistory = false; b.showTabs = !b.showTabs },
                 contentAlignment = Alignment.Center,
-            ) { Text(b.tabs.size.toString(), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (b.showTabs) p.onTint else p.text) }
+            ) { Text(b.tabs.size.toString(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (b.showTabs) p.onTint else p.text) }
             // three-dot menu
             Box {
                 RoundIconButton(Ic.More, "Menu", p.soft, p.text) { menu = true }
@@ -362,7 +362,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                     Text("Browse anything", fontSize = 26.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "Open a video page, then tap the small download button to save it. File links (PDF, APK, ZIP …) download directly.",
-                        fontSize = 15.sp, color = p.muted,
+                        fontSize = 14.sp, color = p.muted,
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SHORTCUTS.forEach { (n, u) -> TintChip(n, false) { tab.go(u) } }
@@ -385,7 +385,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                     Modifier.align(Alignment.BottomEnd).padding(16.dp).size(52.dp).clip(CircleShape)
                         .background(p.primary).clickable(role = Role.Button) { onDownloadPage(tab.url) },
                     contentAlignment = Alignment.Center,
-                ) { Ico(Ic.Download, 24.dp, Color.White) }
+                ) { Ico(Ic.Download, 20.dp, Color.White) }
             }
         }
     }
@@ -417,7 +417,7 @@ private fun TabList(b: BrowserHolder) {
                     Column(Modifier.weight(1f)) {
                         Text(
                             t.title.ifBlank { if (t.started) Urls.host(t.url).ifBlank { "Loading…" } else "New tab" },
-                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                            fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
                         Muted(if (t.started) t.url else "Start page", maxLines = 1)
@@ -445,17 +445,17 @@ private fun FileOfferDialog(o: FileOffer, onClose: () -> Unit, onSubmit: (String
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Muted("Link")
-                Text(o.url, fontSize = 13.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(o.url, fontSize = 12.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Muted("Save as")
                 OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text("Size: $size", fontSize = 13.sp, color = p.muted)
+                Text("Size: $size", fontSize = 12.sp, color = p.muted)
                 Muted("Download location:")
-                Text(where, fontSize = 14.sp)
+                Text(where, fontSize = 13.sp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = wifi, onCheckedChange = { wifi = it })
-                    Text("Wi-Fi only", fontSize = 14.sp)
+                    Text("Wi-Fi only", fontSize = 13.sp)
                     Checkbox(checked = retry, onCheckedChange = { retry = it })
-                    Text("Retry", fontSize = 14.sp)
+                    Text("Retry", fontSize = 13.sp)
                 }
             }
         },
@@ -481,7 +481,7 @@ private fun HistoryList(onOpen: (String) -> Unit, onClose: () -> Unit) {
             if (list.isNotEmpty()) TextButton(onClick = { BrowserHistory.clear() }) { Text("Clear all") }
             TextButton(onClick = onClose) { Text("Close") }
         }
-        if (list.isEmpty()) Text("No pages yet. Pages you open will be listed here.", color = p.muted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp))
+        if (list.isEmpty()) Text("No pages yet. Pages you open will be listed here.", color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp))
         LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
             items(list, key = { it.url }) { v ->
                 Row(
@@ -489,7 +489,7 @@ private fun HistoryList(onOpen: (String) -> Unit, onClose: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(v.title.ifBlank { Urls.host(v.url).ifBlank { v.url } }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(v.title.ifBlank { Urls.host(v.url).ifBlank { v.url } }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         Muted(v.url, maxLines = 1)
                         Muted(fmt.format(java.util.Date(v.time)))
                     }

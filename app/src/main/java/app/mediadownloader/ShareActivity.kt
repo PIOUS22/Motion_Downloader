@@ -209,7 +209,7 @@ private fun SharePopup(
                 Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(p.primary), contentAlignment = Alignment.Center) {
                     Ico(Ic.Download, 16.dp, Color.White)
                 }
-                Text("Motion Downloader", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("Motion Downloader", fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 if (st.analysis != null) Pill("Link analyzed", p.okBg, p.okFg, Ic.Check)
             }
 
@@ -225,7 +225,7 @@ private fun SharePopup(
                 }
 
                 st.error != null -> {
-                    Text(st.error, color = p.errFg, fontSize = 14.sp)
+                    Text(st.error, color = p.errFg, fontSize = 13.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         PillButton("Close", p.soft, p.text) { onClose() }
                         PillButton("Open app", p.tint, p.onTint) { onMore() }
@@ -246,9 +246,9 @@ private fun SharePopup(
                         Column(Modifier.weight(1f)) {
                             Text(
                                 if (PRESETS[st.selected].isAudio) "Download this audio?" else "Download this video?",
-                                fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp, fontWeight = FontWeight.Bold,
                             )
-                            Text(a.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, color = p.muted)
+                            Text(a.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = p.muted)
                         }
                     }
 
@@ -263,7 +263,7 @@ private fun SharePopup(
                                         .border(1.5.dp, if (on) p.primary else p.border, RoundedCornerShape(22.dp))
                                         .clickable { onSelect(idx) },
                                     contentAlignment = Alignment.Center,
-                                ) { Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (on) p.onTint else p.text) }
+                                ) { Text(name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (on) p.onTint else p.text) }
                             }
                         }
                         val size = estimateSize(a, PRESETS[st.selected])
@@ -275,10 +275,10 @@ private fun SharePopup(
                             .clickable(onClick = onSubs).padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Subtitles", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text("Subtitles", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         Text(
                             when (st.subs) { null -> "Off"; "en.*" -> "English"; "bn.*" -> "Bangla"; "hi.*" -> "Hindi"; else -> st.subs },
-                            fontSize = 14.sp, color = p.muted,
+                            fontSize = 13.sp, color = p.muted,
                         )
                     }
 

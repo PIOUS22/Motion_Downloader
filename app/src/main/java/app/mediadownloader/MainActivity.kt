@@ -287,7 +287,7 @@ private fun NavBar(cur: String, running: Int, browserOn: Boolean, onNav: (String
     val p = LocalPal.current
     Column(Modifier.background(p.surface).navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(p.border))
-        Row(Modifier.fillMaxWidth().height(68.dp).padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Row(Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 12.dp, vertical = 6.dp)) {
             NavItem("Home", Ic.Home, cur == "home") { onNav("home") }
             if (browserOn) NavItem("Browser", Ic.Globe, cur == "browser") { onNav("browser") }
             NavItem("Downloads", Ic.Download, cur == "downloads", if (running > 0) running.toString() else null) { onNav("downloads") }
@@ -307,7 +307,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavItem(
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
         Box {
-            Ico(icon, 24.dp, c)
+            Ico(icon, 20.dp, c)
             if (badge != null) {
                 Text(
                     badge, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold,
@@ -333,20 +333,20 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(p.primary), contentAlignment = Alignment.Center) {
-                Ico(Ic.Download, 20.dp, Color.White)
+            Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(p.primary), contentAlignment = Alignment.Center) {
+                Ico(Ic.Download, 16.dp, Color.White)
             }
-            Text("Motion Downloader", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("Motion Downloader", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Paste a video link", fontSize = 30.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold)
-            Text("Copy a link from Facebook, YouTube or any video site, then analyze it.", fontSize = 15.sp, color = p.muted)
+            Text("Paste a video link", fontSize = 24.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold)
+            Text("Copy a link from Facebook, YouTube or any video site, then analyze it.", fontSize = 14.sp, color = p.muted)
         }
 
         s.appUpdate?.let { u ->
             Card(pad = 16.dp) {
-                Text("Update available — v${u.version}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("Update available — v${u.version}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Muted("You have v${BuildConfig.VERSION_NAME}." + if (u.sizeBytes > 0) "  Size: ${fmtSize(u.sizeBytes)}" else "")
                 if (u.notes.isNotBlank()) Muted(u.notes.take(200))
                 if (s.updateProgress >= 0f) Bar(s.updateProgress.coerceIn(0f, 1f))
@@ -381,8 +381,8 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
                         }.padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Ico(Ic.Paste, 18.dp, p.onTint)
-                    Text("Paste", color = p.onTint, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Ico(Ic.Paste, 15.dp, p.onTint)
+                    Text("Paste", color = p.onTint, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
             BigButton(
@@ -390,9 +390,9 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
                 icon = Ic.Link, enabled = !s.analyzing && s.url.isNotBlank(),
             )
             if (s.status.isNotBlank() && (s.statusIsError || s.analyzing)) {
-                Text(s.status, color = if (s.statusIsError) p.errFg else p.muted, fontSize = 13.sp)
+                Text(s.status, color = if (s.statusIsError) p.errFg else p.muted, fontSize = 12.sp)
             }
-            if (s.engineError != null) Text("Download engine failed to start: ${s.engineError}", color = p.errFg, fontSize = 13.sp)
+            if (s.engineError != null) Text("Download engine failed to start: ${s.engineError}", color = p.errFg, fontSize = 12.sp)
             else if (!s.engineReady) Muted("Preparing the download engine (first launch can take a few seconds)…")
         }
 
@@ -404,20 +404,20 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
                         Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(p.surface)
                             .border(1.dp, p.border, RoundedCornerShape(18.dp)).padding(horizontal = 14.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text(n, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
+                    ) { Text(n, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
                 }
                 Box(
                     Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(p.tint).padding(horizontal = 14.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text("Any online video", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = p.onTint) }
+                ) { Text("Any online video", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = p.onTint) }
             }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Recent", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("Recent", fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Box(Modifier.height(44.dp).clickable(role = Role.Button, onClick = onSeeAll), contentAlignment = Alignment.Center) {
-                    Text("See all", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = p.onTint)
+                    Text("See all", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = p.onTint)
                 }
             }
             Card(pad = 12.dp, gap = 0.dp) {
@@ -430,7 +430,7 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
                     ) {
                         Thumb(d.thumb, 64.dp, 44.dp)
                         Column(Modifier.weight(1f)) {
-                            Text(d.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(d.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Muted(d.label.ifBlank { d.platform }, maxLines = 1)
                         }
                         StatusPill(d)
@@ -498,10 +498,10 @@ private fun ResultScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, onDo
     Column(Modifier.fillMaxSize().padding(pad)) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button) { onDone(false) },
+                Modifier.size(38.dp).clip(RoundedCornerShape(19.dp)).clickable(role = Role.Button) { onDone(false) },
                 contentAlignment = Alignment.Center,
-            ) { Ico(Ic.Back, 24.dp) }
-            Text("Link analysis", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            ) { Ico(Ic.Back, 20.dp) }
+            Text("Link analysis", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
 
         Column(
@@ -524,12 +524,12 @@ private fun ResultScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, onDo
                     )
                 }
                 Column {
-                    Text(a.title, fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(a.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     val meta = listOfNotNull(
                         a.uploader.takeIf { it.isNotBlank() },
                         if (a.kind == "playlist") "Playlist" + (a.playlistCount?.let { " · $it items" } ?: "") else null,
                     ).joinToString(" · ")
-                    if (meta.isNotEmpty()) Text(meta, fontSize = 13.sp, color = p.muted, modifier = Modifier.padding(top = 4.dp))
+                    if (meta.isNotEmpty()) Text(meta, fontSize = 12.sp, color = p.muted, modifier = Modifier.padding(top = 4.dp))
                 }
             }
 
@@ -547,7 +547,7 @@ private fun ResultScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, onDo
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             RadioButton(selected = sel, onClick = { vm.selectOption(key) })
-                            Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         }
                     }
                     if (s.selectedOption == "pick") PickPanel(vm, s)
@@ -565,7 +565,7 @@ private fun ResultScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, onDo
                                 .background(if (on) p.surface else Color.Transparent)
                                 .clickable(role = Role.Tab) { vm.setAudio(isAudio) },
                             contentAlignment = Alignment.Center,
-                        ) { Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (on) p.text else p.muted) }
+                        ) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (on) p.text else p.muted) }
                     }
                 }
             }
@@ -585,10 +585,10 @@ private fun ResultScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, onDo
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = sel, onClick = { vm.setPreset(idx) })
-                        Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text(name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         Text(
                             size?.let { (if (it.second) "" else "≈") + fmtSize(it.first) } ?: "—",
-                            fontSize = 14.sp, color = if (sel) p.onTint else p.muted,
+                            fontSize = 13.sp, color = if (sel) p.onTint else p.muted,
                             fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
                             modifier = Modifier.padding(end = 10.dp),
                         )
@@ -612,7 +612,7 @@ private fun ResultScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, onDo
                     shown.forEach { (n, code) -> TintChip(n, s.subsOn && s.subLang == code) { vm.setSubs(code) } }
                 }
             }
-            if (s.status.isNotBlank() && s.statusIsError) Text(s.status, color = p.errFg, fontSize = 13.sp)
+            if (s.status.isNotBlank() && s.statusIsError) Text(s.status, color = p.errFg, fontSize = 12.sp)
             Spacer(Modifier.height(8.dp))
         }
 
@@ -629,7 +629,7 @@ private fun ResultScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, onDo
                     "pick" -> PRESETS[s.presetIndex].shortLabel + " · ${s.picked.size} selected"
                     else -> PRESETS[s.presetIndex].shortLabel + (size?.let { " · " + (if (it.second) "" else "≈") + fmtSize(it.first) } ?: "")
                 }
-                Text(text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             BigButton("Download", { onDone(vm.download()) }, icon = Ic.Download)
         }
@@ -643,7 +643,7 @@ private fun PickPanel(vm: MainViewModel, s: UiState) {
     if (s.loadingEntries) { Muted("Loading playlist videos…"); return }
     if (a.entries.isEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(s.entriesError ?: "The video list has not been loaded.", color = p.errFg, fontSize = 13.sp)
+            Text(s.entriesError ?: "The video list has not been loaded.", color = p.errFg, fontSize = 12.sp)
             PillButton("Retry", p.surface, p.onTint, p.primary) { vm.loadEntriesIfNeeded() }
         }
         return
@@ -675,7 +675,7 @@ private fun PickPanel(vm: MainViewModel, s: UiState) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Checkbox(checked = e.index in s.picked, onCheckedChange = { vm.togglePick(e.index) })
-                        Text("${e.index}. ${e.title}", fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text("${e.index}. ${e.title}", fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         val d = fmtDuration(e.duration)
                         if (d.isNotEmpty()) Muted(d)
                     }
@@ -701,11 +701,11 @@ private fun DownloadsScreen(pad: PaddingValues, all: List<DlItem>, filter: Strin
 
     Column(Modifier.fillMaxSize().padding(pad)) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Downloads", fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text("Downloads", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(role = Role.Button) { History.clearFinished() },
+                Modifier.size(38.dp).clip(RoundedCornerShape(19.dp)).clickable(role = Role.Button) { History.clearFinished() },
                 contentAlignment = Alignment.Center,
-            ) { Ico(Ic.Trash, 22.dp) }
+            ) { Ico(Ic.Trash, 18.dp) }
         }
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
@@ -718,7 +718,7 @@ private fun DownloadsScreen(pad: PaddingValues, all: List<DlItem>, filter: Strin
         if (shown.isEmpty()) {
             Text(
                 if (all.isEmpty()) "Nothing here yet. Downloads you start will appear in this list." else "No downloads in this filter.",
-                color = p.muted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp),
+                color = p.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp),
             )
         }
         LazyColumn(
@@ -737,7 +737,7 @@ private fun DlCard(d: DlItem, fmt: java.text.SimpleDateFormat, ctx: Context) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Thumb(d.thumb, 72.dp, 52.dp)
             Column(Modifier.weight(1f)) {
-                Text(d.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(d.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val sub = when (d.status) {
                     "done" -> "${d.label.ifBlank { d.platform }} · ${fmt.format(java.util.Date(d.time))}"
                     else -> "${d.label.ifBlank { "" }}${if (d.label.isNotBlank()) " · " else ""}${d.platform}"
@@ -839,10 +839,10 @@ private fun SettingRow(title: String, value: String, last: Boolean = false, onCl
         Modifier.fillMaxWidth().height(56.dp).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text(value, fontSize = 15.sp, color = p.muted, textAlign = androidx.compose.ui.text.style.TextAlign.End,
+        Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(value, fontSize = 14.sp, color = p.muted, textAlign = androidx.compose.ui.text.style.TextAlign.End,
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Ico(Ic.Chevron, 18.dp, p.muted)
+        Ico(Ic.Chevron, 15.dp, p.muted)
     }
     if (!last) RowDivider()
 }
@@ -854,7 +854,7 @@ private fun SettingSwitch(title: String, sub: String, checked: Boolean, last: Bo
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Muted(sub, Modifier.padding(top = 2.dp))
         }
         Toggle(checked, onChange)
@@ -875,7 +875,7 @@ private fun <T> ChoiceDialog(title: String, options: List<Pair<String, T>>, sele
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = selected == v, onClick = { onPick(v); onDismiss() })
-                        Text(label, fontSize = 15.sp)
+                        Text(label, fontSize = 14.sp)
                     }
                 }
             }
@@ -897,7 +897,7 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState) {
 
     Column(Modifier.fillMaxSize().padding(pad)) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("Settings", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 4.dp),
@@ -941,7 +941,7 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState) {
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("cookies.txt", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("cookies.txt", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Muted(if (s.cookiesName != null) "Imported" else "Not imported")
                     }
                     if (s.cookiesName != null) PillButton("Remove", p.errBg, p.errFg) { vm.clearCookies() }
@@ -954,7 +954,7 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState) {
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("App version", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("App version", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Muted("v${BuildConfig.VERSION_NAME}")
                     }
                     PillButton(if (s.updateBusy) "Checking…" else "Check for updates", p.tint, p.onTint) { vm.checkAppUpdate(true) }
@@ -965,7 +965,7 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState) {
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Download engine (yt-dlp)", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Download engine (yt-dlp)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Muted(if (s.updating) "Updating…" else s.ytdlpVersion.ifBlank { "?" })
                     }
                     PillButton("Update", p.tint, p.onTint) { vm.updateYtdlp() }

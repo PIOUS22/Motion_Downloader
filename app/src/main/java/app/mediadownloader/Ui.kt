@@ -126,7 +126,7 @@ object Ic {
 }
 
 @Composable
-fun Ico(v: ImageVector, size: Dp = 22.dp, tint: Color = LocalPal.current.text) =
+fun Ico(v: ImageVector, size: Dp = 18.dp, tint: Color = LocalPal.current.text) =
     Icon(v, contentDescription = null, modifier = Modifier.size(size), tint = tint)
 
 // ---------------------------------------------------------------- small building blocks
@@ -143,7 +143,7 @@ fun Card(modifier: Modifier = Modifier, pad: Dp = 12.dp, gap: Dp = 10.dp, conten
 
 @Composable
 fun Label(text: String, modifier: Modifier = Modifier) =
-    Text(text, modifier = modifier, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = LocalPal.current.muted)
+    Text(text, modifier = modifier, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = LocalPal.current.muted)
 
 @Composable
 fun Muted(text: String, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) =
@@ -165,13 +165,13 @@ fun Pill(text: String, bg: Color, fg: Color, icon: ImageVector? = null) {
 fun BigButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, enabled: Boolean = true) {
     val p = LocalPal.current
     Row(
-        modifier.height(54.dp).clip(RoundedCornerShape(16.dp))
+        modifier.height(46.dp).clip(RoundedCornerShape(14.dp))
             .background(if (enabled) p.primary else p.primary.copy(alpha = 0.4f))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
-        if (icon != null) { Ico(icon, 20.dp, Color.White); Box(Modifier.width(8.dp)) }
-        Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        if (icon != null) { Ico(icon, 16.dp, Color.White); Box(Modifier.width(8.dp)) }
+        Text(text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -179,32 +179,32 @@ fun BigButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, 
 @Composable
 fun RoundIconButton(icon: ImageVector, desc: String, bg: Color, fg: Color, onClick: () -> Unit) {
     Box(
-        Modifier.size(44.dp).clip(CircleShape).background(bg).clickable(role = Role.Button, onClick = onClick),
+        Modifier.size(36.dp).clip(CircleShape).background(bg).clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Icon(icon, desc, Modifier.size(20.dp), tint = fg) }
+    ) { Icon(icon, desc, Modifier.size(16.dp), tint = fg) }
 }
 
 /** Pill-shaped text button (Play / Retry / Cancel). */
 @Composable
 fun PillButton(text: String, bg: Color, fg: Color, border: Color? = null, onClick: () -> Unit) {
     Box(
-        Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(bg)
+        Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(bg)
             .then(if (border != null) Modifier.border(1.5.dp, border, RoundedCornerShape(22.dp)) else Modifier)
             .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, color = fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+    ) { Text(text, color = fg, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
 }
 
 @Composable
 fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit) {
     val p = LocalPal.current
     Box(
-        Modifier.height(44.dp).clip(RoundedCornerShape(22.dp))
+        Modifier.height(36.dp).clip(RoundedCornerShape(18.dp))
             .background(if (selected) p.primary else p.surface)
             .border(1.5.dp, if (selected) p.primary else p.border, RoundedCornerShape(22.dp))
             .clickable(role = Role.Tab, onClick = onClick).padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, color = if (selected) Color.White else p.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+    ) { Text(text, color = if (selected) Color.White else p.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
 }
 
 /** Selected chip in the tint colour (subtitle chips). */
@@ -212,12 +212,12 @@ fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit) {
 fun TintChip(text: String, selected: Boolean, onClick: () -> Unit) {
     val p = LocalPal.current
     Box(
-        Modifier.height(44.dp).clip(RoundedCornerShape(22.dp))
+        Modifier.height(36.dp).clip(RoundedCornerShape(18.dp))
             .background(if (selected) p.tint else p.surface)
             .border(1.5.dp, if (selected) p.primary else p.border, RoundedCornerShape(22.dp))
             .clickable(role = Role.RadioButton, onClick = onClick).padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, color = if (selected) p.onTint else p.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+    ) { Text(text, color = if (selected) p.onTint else p.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
 }
 
 /** Switch like the design: 52x32 track. */
