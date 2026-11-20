@@ -304,10 +304,12 @@ private fun App(vm: MainViewModel) {
 
 @Composable
 private fun NavBar(cur: String, running: Int, browserOn: Boolean, onNav: (String) -> Unit) {
-    val p = LocalPal.current
-    Column(Modifier.background(p.surface).navigationBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(p.border))
-        Row(Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 12.dp, vertical = 6.dp)) {
+    // floating dark pill; the selected item is a white pill with icon + name
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp)).background(Color(0xFF2B2B2B)).padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             NavItem("Home", Ic.Home, cur == "home") { onNav("home") }
             if (browserOn) NavItem("Browser", Ic.Globe, cur == "browser") { onNav("browser") }
             NavItem("Downloads", Ic.Download, cur == "downloads", if (running > 0) running.toString() else null) { onNav("downloads") }
@@ -320,23 +322,25 @@ private fun NavBar(cur: String, running: Int, browserOn: Boolean, onNav: (String
 private fun androidx.compose.foundation.layout.RowScope.NavItem(
     label: String, icon: ImageVector, selected: Boolean, badge: String? = null, onClick: () -> Unit,
 ) {
-    val p = LocalPal.current
-    val c = if (selected) p.primary else p.muted
-    Column(
-        Modifier.weight(1f).fillMaxSize().clickable(role = Role.Tab, onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    Row(
+        Modifier.weight(if (selected) 2.4f else 1f).fillMaxSize().clip(RoundedCornerShape(22.dp))
+            .background(if (selected) Color.White else Color.Transparent)
+            .clickable(role = Role.Tab, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
         Box {
-            Ico(icon, 20.dp, c)
-            if (badge != null) {
+            Ico(icon, 20.dp, if (selected) Color(0xFF2B2B2B) else Color.White)
+            if (badge != null && !selected) {
                 Text(
-                    badge, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(start = 18.dp)
-                        .clip(RoundedCornerShape(8.dp)).background(p.primary).padding(horizontal = 5.dp),
+                    badge, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(start = 14.dp)
+                        .clip(RoundedCornerShape(8.dp)).background(Color(0xFF7B52C4)).padding(horizontal = 4.dp),
                 )
             }
         }
-        Text(label, color = c, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        if (selected) {
+            Text(label, color = Color(0xFF2B2B2B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
+        }
     }
 }
 
