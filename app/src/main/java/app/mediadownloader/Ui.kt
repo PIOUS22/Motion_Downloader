@@ -86,6 +86,17 @@ internal fun AppTheme(mode: String, content: @Composable () -> Unit) {
         surface = p.surface, onSurface = p.text, surfaceVariant = p.soft, onSurfaceVariant = p.muted,
         outline = p.border, error = p.errFg,
     )
+    // Status bar / navigation bar icons must be dark on the light theme and light on the dark theme.
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.SideEffect {
+        var c: android.content.Context? = view.context
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+        (c as? android.app.Activity)?.window?.let { w ->
+            val ic = androidx.core.view.WindowCompat.getInsetsController(w, view)
+            ic.isAppearanceLightStatusBars = !dark
+            ic.isAppearanceLightNavigationBars = !dark
+        }
+    }
     CompositionLocalProvider(LocalPal provides p) { MaterialTheme(colorScheme = scheme, content = content) }
 }
 

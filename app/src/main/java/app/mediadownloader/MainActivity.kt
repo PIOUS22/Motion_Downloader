@@ -189,6 +189,26 @@ private fun App(vm: MainViewModel) {
         }
         // "New version available" pop-up
         val upd = s.appUpdate
+        var showBg by remember { mutableStateOf(!prefs.getBoolean("bg_asked", false)) }
+        if (!showPerm && showBg) {
+            AlertDialog(
+                onDismissRequest = { }, containerColor = p.surface,
+                title = { Text("Keep update notifications working") },
+                text = {
+                    Text(
+                        "Some phones (Xiaomi, Redmi, Oppo, Vivo) stop apps in the background, so new-version notifications can be late.\n\n" +
+                            "Open the settings and turn ON Autostart for Motion Downloader, and set Battery saver to No restrictions."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        prefs.edit().putBoolean("bg_asked", true).apply(); showBg = false
+                        openBackgroundSettings(ctx)
+                    }) { Text("Open settings", fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = { TextButton(onClick = { prefs.edit().putBoolean("bg_asked", true).apply(); showBg = false }) { Text("Later") } },
+            )
+        }
         if (!showPerm && upd != null) {
             AlertDialog(
                 onDismissRequest = { vm.dismissUpdate() },
@@ -948,6 +968,10 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState) {
                     PillButton("Import", p.tint, p.onTint) { cookiePicker.launch("*/*") }
                 }
             }
+            Group("Notifications") {
+                val bgCtx = LocalContext.current
+                SettingRow("Keep update notifications working", "Open settings", last = true) { openBackgroundSettings(bgCtx) }
+            }
             Group("About") {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -988,4 +1012,14 @@ private fun SettingsScreen(pad: PaddingValues, vm: MainViewModel, s: UiState) {
             { if (it == "pick") folderPicker.launch(null) else vm.resetSaveFolder() },
         ) { dlg = null }
     }
+}
+
+/** Opens the phone's Autostart screen (Xiaomi/Redmi) or the battery settings, so update notifications keep working. */
+private fun openBackgroundSettings(ctx: Context) {
+    val tries = listOf(
+        Intent().setClassName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
+        Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + ctx.packageName)),
+    )
+    for (i in tries) { if (runCatching { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return }
 }
