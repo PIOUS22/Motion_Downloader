@@ -11,6 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FCM_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
 
@@ -43,3 +45,26 @@ jobs:
           name: Motion Downloader 1.0.${{ github.run_number }}
           body: Automatic build ${{ github.run_number }}
           files: MotionDownloader-*.apk
+
+      # Optional instant push to every phone (needs the FIREBASE_SERVICE_ACCOUNT secret, see OWNER_GUIDE.md).
+      - name: Send push notification
+        if: env.FCM_KEY != ''
+        env:
+          VERSION: 1.0.${{ github.run_number }}
+        run: |
+          pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import json, os, requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          info = json.loads(os.environ["FCM_KEY"])
+          creds = service_account.Credentials.from_service_account_info(
+              info, scopes=["https://www.googleapis.com/auth/firebase.messaging"])
+          creds.refresh(Request())
+          body = {"message": {"topic": "all", "notification": {
+              "title": "Update available",
+              "body": "Motion Downloader " + os.environ["VERSION"] + " is ready. Open the app to update."}}}
+          r = requests.post("https://fcm.googleapis.com/v1/projects/" + info["project_id"] + "/messages:send",
+                            headers={"Authorization": "Bearer " + creds.token}, json=body)
+          print(r.status_code, r.text)
+          PY
