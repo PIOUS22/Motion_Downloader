@@ -24,12 +24,12 @@ class MediaDownloaderApp : Application() {
                     ?.forEach { it.deleteRecursively() }
             }
         }.start()
-        // Look for a new app version twice a day, even when the app is closed.
+        // Look for a new app version every 15 minutes (the shortest time Android allows), even when the app is closed.
         runCatching {
-            val req = PeriodicWorkRequestBuilder<UpdateWorker>(12, TimeUnit.HOURS)
+            val req = PeriodicWorkRequestBuilder<UpdateWorker>(15, TimeUnit.MINUTES)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
-            WorkManager.getInstance(this).enqueueUniquePeriodicWork("update-check", ExistingPeriodicWorkPolicy.KEEP, req)
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork("update-check", ExistingPeriodicWorkPolicy.UPDATE, req)
         }
     }
 }
