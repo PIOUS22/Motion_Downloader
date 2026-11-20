@@ -116,7 +116,7 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
     /** Pull down at the top of a page to reload it. */
     val swipe = androidx.swiperefreshlayout.widget.SwipeRefreshLayout(ctx).apply {
         addView(web, android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
-        setColorSchemeColors(0xFF4F46E5.toInt())
+        setColorSchemeColors(0xFF111111.toInt())
         setOnRefreshListener { web.reload() }
         setDistanceToTriggerSync((140 * ctx.resources.displayMetrics.density).toInt())
         // Refresh only when the page really is at the top (also inside pages that scroll in a inner box).

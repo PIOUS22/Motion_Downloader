@@ -53,7 +53,7 @@ class Pal(
 
 private val LightPal = Pal(
     bg = Color(0xFFF5F6FA), surface = Color.White, text = Color(0xFF14162B), muted = Color(0xFF5B6078),
-    border = Color(0xFFE3E5EE), primary = Color(0xFF4F46E5), tint = Color(0xFFECEBFD), onTint = Color(0xFF4338CA),
+    border = Color(0xFFE3E5EE), primary = Color(0xFF111111), tint = Color(0xFFEDEDED), onTint = Color(0xFF111111),
     soft = Color(0xFFF5F6FA), segBg = Color(0xFFE9EAF2),
     okBg = Color(0xFFE3F5EC), okFg = Color(0xFF0F7A47), errBg = Color(0xFFFDE8EA), errFg = Color(0xFFBF2433),
     warnBg = Color(0xFFFFF1D9), warnFg = Color(0xFF8A5200), scrim = Color(0x8C14162B),
@@ -61,7 +61,7 @@ private val LightPal = Pal(
 
 private val DarkPal = Pal(
     bg = Color(0xFF0F1018), surface = Color(0xFF1A1C28), text = Color(0xFFECEDF5), muted = Color(0xFFA3A8BD),
-    border = Color(0xFF2C2F40), primary = Color(0xFF6A62F2), tint = Color(0xFF26284C), onTint = Color(0xFFC3C0FF),
+    border = Color(0xFF2C2F40), primary = Color(0xFF4A4A4A), tint = Color(0xFF2B2B2B), onTint = Color(0xFFE6E6E6),
     soft = Color(0xFF23253A), segBg = Color(0xFF23253A),
     okBg = Color(0xFF12301F), okFg = Color(0xFF6FD9A0), errBg = Color(0xFF3A1A1F), errFg = Color(0xFFFF8A94),
     warnBg = Color(0xFF3A2C10), warnFg = Color(0xFFF5C26B), scrim = Color(0xA0000000),
@@ -248,7 +248,7 @@ fun Toggle(checked: Boolean, onChange: (Boolean) -> Unit) {
 fun Thumb(url: String?, w: Dp, h: Dp, radius: Dp = 10.dp, modifier: Modifier = Modifier) {
     Box(
         modifier.size(w, h).clip(RoundedCornerShape(radius))
-            .background(Brush.linearGradient(listOf(Color(0xFF4F46E5), Color(0xFF06B6D4)))),
+            .background(Brush.linearGradient(listOf(Color(0xFF111111), Color(0xFF666666)))),
     ) {
         if (url != null) AsyncImage(url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
     }
