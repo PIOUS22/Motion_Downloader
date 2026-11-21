@@ -327,7 +327,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
     val webShown = tab.started && !b.showTabs && !b.showHistory
     Box(Modifier.fillMaxSize()) {
         // page (runs under the curved bands, like the design)
-        Column(Modifier.fillMaxSize().padding(top = topPad + 68.dp)) {
+        Column(Modifier.fillMaxSize().padding(top = topPad + 84.dp)) {
             if (tab.started && tab.progress in 1..99) {
                 Box(Modifier.fillMaxWidth().height(3.dp).background(p.border)) {
                     Box(Modifier.fillMaxWidth(tab.progress / 100f).height(3.dp).background(p.primary))
@@ -440,7 +440,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                 }
             }
         }
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) { drawCurves(p.curve) }
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) { drawCurves(p.curve, topPad + 74.dp, topPad + 84.dp) }
         Box(Modifier.padding(top = topPad)) {
             // top toolbar (pill)
             val ink = Color(0xFF231F20)

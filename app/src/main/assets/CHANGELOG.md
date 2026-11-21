@@ -1,6 +1,10 @@
 # Changelog
 
 ## What's new
+- New app icon (MD logo)
+- Home: Recent download card at the bottom, thinner curved bands
+- Browser: page header no longer hidden under the curve
+- Updates: no more checking every 15 minutes (instant push, or every 6 hours without it)
 - Faster link analysis (playlist and video are read at the same time)
 - Browser: page now runs under the curved top and bottom bands
 - Browser: new Home button in the top bar

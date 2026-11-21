@@ -333,14 +333,16 @@ private fun App(vm: MainViewModel) {
 }
 
 /** Soft curved bands at the top and bottom of the screen (from the design). */
-internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCurves(c: Color) {
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCurves(
+    c: Color, topEdge: androidx.compose.ui.unit.Dp = 92.dp, topCenter: androidx.compose.ui.unit.Dp = 120.dp,
+) {
     val w = size.width; val h = size.height
-    val te = 100.dp.toPx(); val tc = 140.dp.toPx()
+    val te = topEdge.toPx(); val tc = topCenter.toPx()
     drawPath(androidx.compose.ui.graphics.Path().apply {
         moveTo(0f, 0f); lineTo(w, 0f); lineTo(w, te)
         quadraticBezierTo(w / 2, 2 * tc - te, 0f, te); close()
     }, c)
-    val be = 96.dp.toPx(); val bc = 132.dp.toPx()
+    val be = 84.dp.toPx(); val bc = 108.dp.toPx()
     drawPath(androidx.compose.ui.graphics.Path().apply {
         moveTo(0f, h); lineTo(w, h); lineTo(w, h - be)
         quadraticBezierTo(w / 2, h - (2 * bc - be), 0f, h - be); close()
@@ -414,12 +416,13 @@ private fun androidx.compose.foundation.layout.RowScope.NavItem(
 private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: List<DlItem>, onSeeAll: () -> Unit) {
     val p = LocalPal.current
     val ctx = LocalContext.current
+    Column(Modifier.fillMaxSize().padding(pad).imePadding()) {
     Column(
-        Modifier.fillMaxSize().padding(pad).imePadding().verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
+        Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Logo(64.dp) }
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Logo(46.dp) }
+        Spacer(Modifier.height(10.dp))
 
         s.appUpdate?.let { u ->
             Card(pad = 16.dp) {
@@ -490,32 +493,53 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
             else if (!s.engineReady) Muted("Preparing the download engine…")
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Recent", fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Box(Modifier.height(44.dp).clickable(role = Role.Button, onClick = onSeeAll), contentAlignment = Alignment.Center) {
-                    Text("See all", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = p.onTint)
-                }
+    }
+    // Recent: pinned near the bottom, like the design
+    val ink = if (p.dark) Color.White else Color(0xFF231F20)
+    val pillBg = if (p.dark) Color.White else Color(0xFF000000)
+    val pillFg = if (p.dark) Color(0xFF000000) else Color.White
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Recent", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Box(Modifier.height(36.dp).clickable(role = Role.Button, onClick = onSeeAll), contentAlignment = Alignment.CenterEnd) {
+                Text("See all", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
-            Card(pad = 12.dp, gap = 0.dp) {
-                val recent = hist.take(2)
-                if (recent.isEmpty()) Muted("Nothing yet. Downloads you start will appear here.", Modifier.padding(vertical = 8.dp))
-                recent.forEachIndexed { i, d ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Thumb(d.thumb, 64.dp, 44.dp)
-                        Column(Modifier.weight(1f)) {
-                            Text(d.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Muted(d.label.ifBlank { d.platform }, maxLines = 1)
-                        }
-                        StatusPill(d)
+        }
+        val d = hist.firstOrNull()
+        val shape = RoundedCornerShape(16.dp)
+        if (d == null) {
+            Muted("Nothing yet. Downloads you start will appear here.", Modifier.padding(vertical = 8.dp))
+        } else {
+            val fmt = remember { java.text.SimpleDateFormat("d MMM. h:mma", java.util.Locale.getDefault()) }
+            Row(
+                Modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.5.dp, ink, shape).padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Thumb(d.thumb, 64.dp, 56.dp, 12.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(d.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        d.label.ifBlank { d.platform } + " . " + fmt.format(java.util.Date(d.time)),
+                        fontSize = 10.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (d.status == "done") Pill("Downloaded", pillBg, pillFg) else StatusPill(d)
+                        Spacer(Modifier.weight(1f))
+                        if (d.status == "done") Box(
+                            Modifier.height(26.dp).clip(RoundedCornerShape(13.dp)).background(pillBg)
+                                .clickable(role = Role.Button) { openDownloaded(ctx, d) }.padding(horizontal = 12.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("Play", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = pillFg) }
+                        Box(
+                            Modifier.height(26.dp).clip(RoundedCornerShape(13.dp)).background(p.soft)
+                                .clickable(role = Role.Button, onClick = onSeeAll).padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Ico(Ic.More, 16.dp, ink) }
                     }
-                    if (i < recent.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(p.border))
                 }
             }
         }
+    }
     }
 }
 

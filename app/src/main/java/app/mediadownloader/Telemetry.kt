@@ -9,7 +9,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 
 /** Usage numbers, crash reports and push topic. Does nothing unless Firebase is set up (app/google-services.json). */
 object Telemetry {
-    private fun on(ctx: Context) = runCatching { FirebaseApp.getApps(ctx).isNotEmpty() }.getOrDefault(false)
+    fun on(ctx: Context) = runCatching { FirebaseApp.getApps(ctx).isNotEmpty() }.getOrDefault(false)
 
     fun event(ctx: Context, name: String, vararg params: Pair<String, String>) {
         if (!on(ctx)) return

@@ -29,7 +29,7 @@ Every push to main builds a new APK and release. Delete a bad release on the Rel
 
 
 ## Instant "new version" notification (even when the app is closed)
-1. Every phone already checks GitHub every 15 minutes in the background and shows "Update available".
+1. Every phone already checks GitHub every 6 hours in the background and shows "Update available".
 2. For an instant push: set up Firebase (put `google-services.json` in `app/`), then in Firebase
    Project settings -> Service accounts -> Generate new private key.
 3. In GitHub: Settings -> Secrets and variables -> Actions -> New secret named `FIREBASE_SERVICE_ACCOUNT`,

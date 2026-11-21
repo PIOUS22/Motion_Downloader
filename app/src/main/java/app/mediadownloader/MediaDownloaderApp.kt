@@ -24,12 +24,18 @@ class MediaDownloaderApp : Application() {
                     ?.forEach { it.deleteRecursively() }
             }
         }.start()
-        // Look for a new app version every 15 minutes (the shortest time Android allows), even when the app is closed.
+        // New versions arrive as an instant push when Firebase is set up (see FIREBASE_SETUP.md).
+        // Without Firebase, fall back to a slow check (every 6 hours) so the app is not woken all the time.
         runCatching {
-            val req = PeriodicWorkRequestBuilder<UpdateWorker>(15, TimeUnit.MINUTES)
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .build()
-            WorkManager.getInstance(this).enqueueUniquePeriodicWork("update-check", ExistingPeriodicWorkPolicy.UPDATE, req)
+            val wm = WorkManager.getInstance(this)
+            if (Telemetry.on(this)) {
+                wm.cancelUniqueWork("update-check")
+            } else {
+                val req = PeriodicWorkRequestBuilder<UpdateWorker>(6, TimeUnit.HOURS)
+                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                    .build()
+                wm.enqueueUniquePeriodicWork("update-check", ExistingPeriodicWorkPolicy.UPDATE, req)
+            }
         }
     }
 }
