@@ -333,7 +333,7 @@ private fun App(vm: MainViewModel) {
 }
 
 /** Soft curved bands at the top and bottom of the screen (from the design). */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCurves(c: Color) {
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCurves(c: Color) {
     val w = size.width; val h = size.height
     val te = 100.dp.toPx(); val tc = 140.dp.toPx()
     drawPath(androidx.compose.ui.graphics.Path().apply {

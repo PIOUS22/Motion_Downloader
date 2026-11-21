@@ -106,7 +106,9 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
         val req = YoutubeDLRequest(url)
         req.addOption("-J")
         req.addOption("--no-warnings")
-        req.addOption("--socket-timeout", 25)
+        req.addOption("--socket-timeout", 20)
+        req.addOption("--retries", 2)
+        req.addOption("--extractor-retries", 1)
         flags.forEach { req.addOption(it) }
         if (cookies != null) req.addOption("--cookies", cookies)
         val out = YoutubeDL.getInstance().execute(req).out
@@ -160,13 +162,18 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
         val info: JSONObject
 
         if (yt && videoId != null) {
+            // the playlist info is fetched at the same time as the video (was one after the other)
+            val purl = if (listId != null) "https://www.youtube.com/playlist?list=$listId" else null
+            var plResult: Result<JSONObject>? = null
+            val plThread = if (purl != null) Thread {
+                plResult = runCatching { json(purl, cookies, "--flat-playlist") }
+            }.also { it.start() } else null
             info = json(url, cookies, "--no-playlist")
-            if (listId != null) {                       // video inside a playlist -> offer both
-                val purl = "https://www.youtube.com/playlist?list=$listId"
+            if (purl != null) {                          // video inside a playlist -> offer both
                 playlistUrl = purl                       // always offer the playlist; entries load on demand
-                runCatching { json(purl, cookies, "--flat-playlist") }.onSuccess { p ->
+                plThread?.join()
+                plResult?.onSuccess { p ->
                     entries = entryList(p, yt)
-                    playlistUrl = purl
                     playlistTitle = p.str("title")
                     playlistCount = if (p.has("playlist_count") && !p.isNull("playlist_count"))
                         p.optInt("playlist_count") else entries.size.takeIf { it > 0 }

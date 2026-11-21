@@ -323,197 +323,213 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
     androidx.activity.compose.BackHandler(enabled = addr) { addr = false; focus.clearFocus() }
     LaunchedEffect(addr) { if (addr) runCatching { addrFocus.requestFocus() } }
 
-    Column(Modifier.fillMaxSize().padding(pad)) {
-        // top toolbar (pill)
-        val ink = Color(0xFF231F20)
-        val dim = Color(0xFF9AA5B1)
-        Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
-            Row(
-                Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp))
-                    .background(if (p.dark) Color(0xFFCFEDFC) else p.bg)
-                    .border(1.5.dp, Color(0xFF00AEEF), RoundedCornerShape(26.dp)).padding(horizontal = 6.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Box(
-                    Modifier.size(34.dp).clip(CircleShape).clickable(enabled = tab.canBack, role = Role.Button) {
-                        if (tab.web.canGoBack()) tab.web.goBack()
-                    },
-                    contentAlignment = Alignment.Center,
-                ) { Ico(Ic.Back, 20.dp, if (tab.canBack) ink else dim) }
-                Box(
-                    Modifier.size(34.dp).clip(CircleShape).clickable(enabled = tab.canForward, role = Role.Button) { tab.web.goForward() },
-                    contentAlignment = Alignment.Center,
-                ) { Ico(Ic.Forward, 20.dp, if (tab.canForward) ink else dim) }
-                Row(
-                    Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(19.dp)).background(Color.White)
-                        .clickable(role = Role.Button) { b.showTabs = false; b.showHistory = false; field = if (tab.isPage()) tab.url else ""; addr = true }
-                        .padding(start = 14.dp, end = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val host = if (tab.isPage()) (runCatching { Uri.parse(tab.url).host?.removePrefix("www.") }.getOrNull() ?: tab.url) else ""
-                    Text(
-                        host.ifEmpty { "Search or type address" }, fontSize = 13.sp, maxLines = 1,
-                        color = if (host.isEmpty()) dim else ink, modifier = Modifier.weight(1f),
-                    )
-                    Ico(Ic.Search, 18.dp, dim)
-                }
-                Box(
-                    Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) { b.showHistory = false; b.showTabs = !b.showTabs },
-                    contentAlignment = Alignment.Center,
-                ) { Text(b.tabs.size.toString(), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = if (b.showTabs) Color(0xFF00AEEF) else ink) }
-                Box(Modifier.width(1.5.dp).height(22.dp).background(ink.copy(alpha = 0.5f)))
-                Box {
-                    Box(
-                        Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) { menu = true },
-                        contentAlignment = Alignment.Center,
-                    ) { Ico(Ic.MoreV, 20.dp, ink) }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text("New tab") }, onClick = { menu = false; b.addTab() })
-                        DropdownMenuItem(text = { Text("Reload") }, onClick = { menu = false; if (tab.started) tab.web.reload() })
-                        DropdownMenuItem(text = { Text("Copy link") }, enabled = tab.isPage(), onClick = {
-                            menu = false
-                            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            cm.setPrimaryClip(android.content.ClipData.newPlainText("link", tab.url))
-                            Toast.makeText(ctx, "Link copied", Toast.LENGTH_SHORT).show()
-                        })
-                        DropdownMenuItem(text = { Text("History") }, onClick = { menu = false; b.showTabs = false; b.showHistory = true })
-                        DropdownMenuItem(text = { Text("Start page") }, onClick = { menu = false; b.showHistory = false; tab.showStartPage(); field = "" })
-                        DropdownMenuItem(text = { Text("Close tab") }, onClick = { menu = false; b.closeTab(b.index) })
-                    }
+    val topPad = pad.calculateTopPadding()
+    val webShown = tab.started && !b.showTabs && !b.showHistory
+    Box(Modifier.fillMaxSize()) {
+        // page (runs under the curved bands, like the design)
+        Column(Modifier.fillMaxSize().padding(top = topPad + 68.dp)) {
+            if (tab.started && tab.progress in 1..99) {
+                Box(Modifier.fillMaxWidth().height(3.dp).background(p.border)) {
+                    Box(Modifier.fillMaxWidth(tab.progress / 100f).height(3.dp).background(p.primary))
                 }
             }
-        }
-        if (tab.started && tab.progress in 1..99) {
-            Box(Modifier.fillMaxWidth().height(3.dp).background(p.border)) {
-                Box(Modifier.fillMaxWidth(tab.progress / 100f).height(3.dp).background(p.primary))
-            }
-        }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (b.showTabs) {
-                TabList(b)
-            } else if (b.showHistory) {
-                HistoryList(onOpen = { u -> b.showHistory = false; tab.go(u) }, onClose = { b.showHistory = false })
-            } else if (!tab.started) {
-                Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Spacer(Modifier.height(36.dp))
-                    Logo(56.dp)
-                    Spacer(Modifier.height(22.dp))
-                    Row(
-                        Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(24.dp)).background(p.soft)
-                            .padding(start = 16.dp, end = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+            Box(Modifier.weight(1f).fillMaxWidth().padding(bottom = if (webShown) 0.dp else pad.calculateBottomPadding())) {
+                if (b.showTabs) {
+                    TabList(b)
+                } else if (b.showHistory) {
+                    HistoryList(onOpen = { u -> b.showHistory = false; tab.go(u) }, onClose = { b.showHistory = false })
+                } else if (!tab.started) {
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        androidx.compose.foundation.text.BasicTextField(
-                            value = home, onValueChange = { home = it }, singleLine = true,
-                            modifier = Modifier.weight(1f),
-                            textStyle = androidx.compose.ui.text.TextStyle(color = p.text, fontSize = 15.sp),
-                            cursorBrush = androidx.compose.ui.graphics.SolidColor(p.text),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                            keyboardActions = KeyboardActions(onGo = { tab.go(home); home = ""; focus.clearFocus() }),
-                            decorationBox = { inner ->
-                                Box(contentAlignment = Alignment.CenterStart) {
-                                    if (home.isEmpty()) Text("Search or type address", fontSize = 15.sp, color = p.muted)
-                                    inner()
-                                }
-                            },
-                        )
-                        Box(
-                            Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) { startVoice() },
-                            contentAlignment = Alignment.Center,
-                        ) { Ico(Ic.Mic, 20.dp, p.muted) }
-                    }
-                    Spacer(Modifier.height(26.dp))
-                    val tiles = listOf(
-                        Triple("YouTube", "Y", Color(0xFFE53935)), Triple("Facebook", "f", Color(0xFF1877F2)),
-                        Triple("Instagram", "I", Color(0xFFC13584)), Triple("TikTok", "T", Color(0xFF111111)),
-                        Triple("X", "X", Color(0xFF111111)), Triple("Vimeo", "V", Color(0xFF1AB7EA)),
-                    )
-                    val urls = SHORTCUTS.toMap()
-                    @Composable
-                    fun Tile(label: String, tinted: Boolean, content: @Composable () -> Unit, onClick: () -> Unit) {
-                        Column(
-                            Modifier.width(86.dp).clickable(role = Role.Button, onClick = onClick),
-                            horizontalAlignment = Alignment.CenterHorizontally,
+                        Spacer(Modifier.height(36.dp))
+                        Logo(56.dp)
+                        Spacer(Modifier.height(22.dp))
+                        Row(
+                            Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(24.dp)).background(p.soft)
+                                .padding(start = 16.dp, end = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            androidx.compose.foundation.text.BasicTextField(
+                                value = home, onValueChange = { home = it }, singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                textStyle = androidx.compose.ui.text.TextStyle(color = p.text, fontSize = 15.sp),
+                                cursorBrush = androidx.compose.ui.graphics.SolidColor(p.text),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                keyboardActions = KeyboardActions(onGo = { tab.go(home); home = ""; focus.clearFocus() }),
+                                decorationBox = { inner ->
+                                    Box(contentAlignment = Alignment.CenterStart) {
+                                        if (home.isEmpty()) Text("Search or type address", fontSize = 15.sp, color = p.muted)
+                                        inner()
+                                    }
+                                },
+                            )
                             Box(
-                                Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(if (tinted) p.tint else p.soft),
+                                Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) { startVoice() },
                                 contentAlignment = Alignment.Center,
-                            ) { content() }
-                            Spacer(Modifier.height(6.dp))
-                            Text(label, fontSize = 12.sp, color = p.text, maxLines = 1)
+                            ) { Ico(Ic.Mic, 20.dp, p.muted) }
                         }
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        tiles.chunked(3).forEach { rowT ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                rowT.forEach { (n, ch, c) ->
-                                    Tile(n, false, { Text(ch, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = c) }) {
-                                        urls[n]?.let { tab.go(it) }
+                        Spacer(Modifier.height(26.dp))
+                        val tiles = listOf(
+                            Triple("YouTube", "Y", Color(0xFFE53935)), Triple("Facebook", "f", Color(0xFF1877F2)),
+                            Triple("Instagram", "I", Color(0xFFC13584)), Triple("TikTok", "T", Color(0xFF111111)),
+                            Triple("X", "X", Color(0xFF111111)), Triple("Vimeo", "V", Color(0xFF1AB7EA)),
+                        )
+                        val urls = SHORTCUTS.toMap()
+                        @Composable
+                        fun Tile(label: String, tinted: Boolean, content: @Composable () -> Unit, onClick: () -> Unit) {
+                            Column(
+                                Modifier.width(86.dp).clickable(role = Role.Button, onClick = onClick),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Box(
+                                    Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(if (tinted) p.tint else p.soft),
+                                    contentAlignment = Alignment.Center,
+                                ) { content() }
+                                Spacer(Modifier.height(6.dp))
+                                Text(label, fontSize = 12.sp, color = p.text, maxLines = 1)
+                            }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            tiles.chunked(3).forEach { rowT ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    rowT.forEach { (n, ch, c) ->
+                                        Tile(n, false, { Text(ch, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = c) }) {
+                                            urls[n]?.let { tab.go(it) }
+                                        }
                                     }
                                 }
                             }
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Tile("Search", true, { Ico(Ic.Search, 26.dp, p.onTint) }) { tab.go("https://www.google.com") }
+                                Tile("History", true, { Ico(Ic.Clock, 26.dp, p.onTint) }) { b.showTabs = false; b.showHistory = true }
+                                Tile("Start", true, { Ico(Ic.Star, 26.dp, p.onTint) }) { tab.go("https://www.google.com") }
+                            }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Tile("Search", true, { Ico(Ic.Search, 26.dp, p.onTint) }) { tab.go("https://www.google.com") }
-                            Tile("History", true, { Ico(Ic.Clock, 26.dp, p.onTint) }) { b.showTabs = false; b.showHistory = true }
-                            Tile("Start", true, { Ico(Ic.Star, 26.dp, p.onTint) }) { tab.go("https://www.google.com") }
+                        Spacer(Modifier.height(24.dp))
+                        Column(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.soft).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text("HOW IT WORKS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.muted)
+                            Text(
+                                "Open a video page, then tap the small download button to save it. File links (PDF, APK, ZIP …) download directly.",
+                                fontSize = 13.sp, color = p.text,
+                            )
                         }
+                        Spacer(Modifier.height(20.dp))
                     }
-                    Spacer(Modifier.height(24.dp))
-                    Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.soft).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text("HOW IT WORKS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.muted)
-                        Text(
-                            "Open a video page, then tap the small download button to save it. File links (PDF, APK, ZIP …) download directly.",
-                            fontSize = 13.sp, color = p.text,
+                } else {
+                    androidx.compose.runtime.key(tab.id) {
+                        AndroidView(
+                            factory = {
+                                (tab.swipe.parent as? android.view.ViewGroup)?.removeView(tab.swipe)
+                                tab.swipe
+                            },
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
-                    Spacer(Modifier.height(20.dp))
                 }
-            } else {
-                androidx.compose.runtime.key(tab.id) {
-                    AndroidView(
-                        factory = {
-                            (tab.swipe.parent as? android.view.ViewGroup)?.removeView(tab.swipe)
-                            tab.swipe
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                if (!b.showTabs && !b.showHistory && tab.isPage() && tab.hasVideo) {
+                    Box(
+                        Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + pad.calculateBottomPadding()).size(52.dp).clip(CircleShape)
+                            .background(p.primary).clickable(role = Role.Button) { onDownloadPage(tab.url) },
+                        contentAlignment = Alignment.Center,
+                    ) { Ico(Ic.Download, 20.dp, Color.White) }
                 }
             }
-            if (!b.showTabs && !b.showHistory && tab.isPage() && tab.hasVideo) {
-                Box(
-                    Modifier.align(Alignment.BottomEnd).padding(16.dp).size(52.dp).clip(CircleShape)
-                        .background(p.primary).clickable(role = Role.Button) { onDownloadPage(tab.url) },
-                    contentAlignment = Alignment.Center,
-                ) { Ico(Ic.Download, 20.dp, Color.White) }
-            }
-            if (addr) {
+        }
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) { drawCurves(p.curve) }
+        Box(Modifier.padding(top = topPad)) {
+            // top toolbar (pill)
+            val ink = Color(0xFF231F20)
+            val dim = Color(0xFF9AA5B1)
+            Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
                 Row(
-                    Modifier.fillMaxWidth().background(p.bg).padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp))
+                        .background(if (p.dark) Color(0xFFCFEDFC) else p.bg)
+                        .border(1.5.dp, Color(0xFF00AEEF), RoundedCornerShape(26.dp)).padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    OutlinedTextField(
-                        value = field, onValueChange = { field = it },
-                        modifier = Modifier.weight(1f).focusRequester(addrFocus).onFocusChanged { editing = it.isFocused },
-                        placeholder = { Text("Search or type address") }, singleLine = true, shape = RoundedCornerShape(24.dp),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                        keyboardActions = KeyboardActions(onGo = {
-                            b.showHistory = false; b.showTabs = false; tab.go(field); addr = false; focus.clearFocus()
-                        }),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = p.soft, unfocusedContainerColor = p.soft,
-                            focusedBorderColor = p.primary, unfocusedBorderColor = p.border,
-                        ),
-                    )
-                    TextButton(onClick = { addr = false; focus.clearFocus() }) { Text("Cancel") }
+                    Box(
+                        Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) {
+                            b.showTabs = false; b.showHistory = false; tab.showStartPage(); field = ""
+                        },
+                        contentAlignment = Alignment.Center,
+                    ) { Ico(Ic.Home, 22.dp, ink) }
+                    Box(
+                        Modifier.size(34.dp).clip(CircleShape).clickable(enabled = tab.canBack, role = Role.Button) {
+                            if (tab.web.canGoBack()) tab.web.goBack()
+                        },
+                        contentAlignment = Alignment.Center,
+                    ) { Ico(Ic.Back, 20.dp, if (tab.canBack) ink else dim) }
+                    Box(
+                        Modifier.size(34.dp).clip(CircleShape).clickable(enabled = tab.canForward, role = Role.Button) { tab.web.goForward() },
+                        contentAlignment = Alignment.Center,
+                    ) { Ico(Ic.Forward, 20.dp, if (tab.canForward) ink else dim) }
+                    Row(
+                        Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(19.dp)).background(Color.White)
+                            .clickable(role = Role.Button) { b.showTabs = false; b.showHistory = false; field = if (tab.isPage()) tab.url else ""; addr = true }
+                            .padding(start = 14.dp, end = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        val host = if (tab.isPage()) (runCatching { Uri.parse(tab.url).host?.removePrefix("www.") }.getOrNull() ?: tab.url) else ""
+                        Text(
+                            host.ifEmpty { "Search or type address" }, fontSize = 13.sp, maxLines = 1,
+                            color = if (host.isEmpty()) dim else ink, modifier = Modifier.weight(1f),
+                        )
+                        Ico(Ic.Search, 18.dp, dim)
+                    }
+                    Box(
+                        Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) { b.showHistory = false; b.showTabs = !b.showTabs },
+                        contentAlignment = Alignment.Center,
+                    ) { Text(b.tabs.size.toString(), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = if (b.showTabs) Color(0xFF00AEEF) else ink) }
+                    Box(Modifier.width(1.5.dp).height(22.dp).background(ink.copy(alpha = 0.5f)))
+                    Box {
+                        Box(
+                            Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) { menu = true },
+                            contentAlignment = Alignment.Center,
+                        ) { Ico(Ic.MoreV, 20.dp, ink) }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(text = { Text("New tab") }, onClick = { menu = false; b.addTab() })
+                            DropdownMenuItem(text = { Text("Reload") }, onClick = { menu = false; if (tab.started) tab.web.reload() })
+                            DropdownMenuItem(text = { Text("Copy link") }, enabled = tab.isPage(), onClick = {
+                                menu = false
+                                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                cm.setPrimaryClip(android.content.ClipData.newPlainText("link", tab.url))
+                                Toast.makeText(ctx, "Link copied", Toast.LENGTH_SHORT).show()
+                            })
+                            DropdownMenuItem(text = { Text("History") }, onClick = { menu = false; b.showTabs = false; b.showHistory = true })
+                            DropdownMenuItem(text = { Text("Start page") }, onClick = { menu = false; b.showHistory = false; tab.showStartPage(); field = "" })
+                            DropdownMenuItem(text = { Text("Close tab") }, onClick = { menu = false; b.closeTab(b.index) })
+                        }
+                    }
                 }
             }
+        }
+        Box(Modifier.padding(top = topPad + 68.dp)) {
+                if (addr) {
+                    Row(
+                        Modifier.fillMaxWidth().background(p.bg).padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = field, onValueChange = { field = it },
+                            modifier = Modifier.weight(1f).focusRequester(addrFocus).onFocusChanged { editing = it.isFocused },
+                            placeholder = { Text("Search or type address") }, singleLine = true, shape = RoundedCornerShape(24.dp),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = {
+                                b.showHistory = false; b.showTabs = false; tab.go(field); addr = false; focus.clearFocus()
+                            }),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = p.soft, unfocusedContainerColor = p.soft,
+                                focusedBorderColor = p.primary, unfocusedBorderColor = p.border,
+                            ),
+                        )
+                        TextButton(onClick = { addr = false; focus.clearFocus() }) { Text("Cancel") }
+                    }
+                }
         }
     }
 }
