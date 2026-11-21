@@ -34,3 +34,7 @@ Every push to main builds a new APK and release. Delete a bad release on the Rel
    Project settings -> Service accounts -> Generate new private key.
 3. In GitHub: Settings -> Secrets and variables -> Actions -> New secret named `FIREBASE_SERVICE_ACCOUNT`,
    paste the whole key file. After that every new release sends a push to all users.
+
+## Changelog
+Before every upload, edit `app/src/main/assets/CHANGELOG.md`: replace the lines under "## What's new" with this update's changes.
+That text is shown to users in the app after they update, and becomes the release notes on GitHub.

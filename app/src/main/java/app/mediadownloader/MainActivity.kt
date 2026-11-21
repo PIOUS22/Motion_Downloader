@@ -15,6 +15,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -143,6 +147,19 @@ private fun App(vm: MainViewModel) {
         showPerm = false
     }
     LaunchedEffect(Unit) { Updater.loadState(ctx) }
+    // "What's new": shown once after the app was updated (not on a fresh install)
+    var whatsNew by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        val last = prefs.getString("seen_version", null)
+        if (last != BuildConfig.VERSION_NAME) {
+            prefs.edit().putString("seen_version", BuildConfig.VERSION_NAME).apply()
+            if (last != null) whatsNew = runCatching {
+                ctx.assets.open("CHANGELOG.md").bufferedReader().use { it.readText() }
+                    .lineSequence().dropWhile { !it.startsWith("## ") }.drop(1)
+                    .takeWhile { !it.startsWith("## ") }.joinToString("\n").trim()
+            }.getOrNull()?.ifBlank { null }
+        }
+    }
     val us by Updater.state.collectAsState()
     var readyLater by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(Unit) { if (activityWantsUpdate(ctx)) { vm.checkAppUpdate(true); screen = "settings" } }
@@ -275,8 +292,18 @@ private fun App(vm: MainViewModel) {
                 } else null,
             )
         }
+        val wn = whatsNew
+        if (wn != null && !showPerm) {
+            AlertDialog(
+                onDismissRequest = { whatsNew = null }, containerColor = p.surface,
+                title = { Text("What's new in v${BuildConfig.VERSION_NAME}") },
+                text = { Text(wn) },
+                confirmButton = { TextButton(onClick = { whatsNew = null }) { Text("OK", fontWeight = FontWeight.Bold) } },
+            )
+        }
         Scaffold(
-            containerColor = p.bg,
+            modifier = Modifier.fillMaxSize().background(p.bg).drawBehind { drawCurves(p.curve) },
+            containerColor = Color.Transparent,
             bottomBar = {
                 if (screen != "result") NavBar(screen, hist.count { it.status == "active" || it.status == "pending" }, browserOn) { screen = it }
             },
@@ -305,12 +332,28 @@ private fun App(vm: MainViewModel) {
     }
 }
 
+/** Soft curved bands at the top and bottom of the screen (from the design). */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCurves(c: Color) {
+    val w = size.width; val h = size.height
+    val te = 100.dp.toPx(); val tc = 140.dp.toPx()
+    drawPath(androidx.compose.ui.graphics.Path().apply {
+        moveTo(0f, 0f); lineTo(w, 0f); lineTo(w, te)
+        quadraticBezierTo(w / 2, 2 * tc - te, 0f, te); close()
+    }, c)
+    val be = 96.dp.toPx(); val bc = 132.dp.toPx()
+    drawPath(androidx.compose.ui.graphics.Path().apply {
+        moveTo(0f, h); lineTo(w, h); lineTo(w, h - be)
+        quadraticBezierTo(w / 2, h - (2 * bc - be), 0f, h - be); close()
+    }, c)
+}
+
 @Composable
 private fun NavBar(cur: String, running: Int, browserOn: Boolean, onNav: (String) -> Unit) {
     // floating dark pill; the selected item is a white pill with icon + name
+    val dk = LocalPal.current.dark
     Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 10.dp)) {
         Row(
-            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp)).background(Color(0xFF2B2B2B)).padding(6.dp),
+            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp)).background(if (dk) Color.White else Color(0xFF000000)).padding(6.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             NavItem("Home", Ic.Home, cur == "home") { onNav("home") }
@@ -326,14 +369,18 @@ private fun androidx.compose.foundation.layout.RowScope.NavItem(
     label: String, icon: ImageVector, selected: Boolean, badge: String? = null, onClick: () -> Unit,
 ) {
     // the selected item grows, turns white and shows its name - all animated
+    val dk = LocalPal.current.dark
+    val selBg = if (dk) Color(0xFF000000) else Color.White
+    val selFg = if (dk) Color.White else Color(0xFF231F20)
+    val offFg = if (dk) Color(0xFF231F20) else Color.White
     val w by androidx.compose.animation.core.animateFloatAsState(
         if (selected) 2.4f else 1f, androidx.compose.animation.core.tween(280), label = "w",
     )
     val bg by androidx.compose.animation.animateColorAsState(
-        if (selected) Color.White else Color.Transparent, androidx.compose.animation.core.tween(280), label = "bg",
+        if (selected) selBg else Color.Transparent, androidx.compose.animation.core.tween(280), label = "bg",
     )
     val fg by androidx.compose.animation.animateColorAsState(
-        if (selected) Color(0xFF2B2B2B) else Color.White, androidx.compose.animation.core.tween(280), label = "fg",
+        if (selected) selFg else offFg, androidx.compose.animation.core.tween(280), label = "fg",
     )
     Row(
         Modifier.weight(w).fillMaxSize().clip(RoundedCornerShape(22.dp)).background(bg)
@@ -346,7 +393,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavItem(
                 Text(
                     badge, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.TopEnd).padding(start = 14.dp)
-                        .clip(RoundedCornerShape(8.dp)).background(Color(0xFF555555)).padding(horizontal = 4.dp),
+                        .clip(RoundedCornerShape(8.dp)).background(Color(0xFF00AEEF)).padding(horizontal = 4.dp),
                 )
             }
         }
@@ -355,7 +402,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavItem(
             enter = androidx.compose.animation.expandHorizontally(androidx.compose.animation.core.tween(280)) + androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(280)),
             exit = androidx.compose.animation.shrinkHorizontally(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(150)),
         ) {
-            Text(label, color = Color(0xFF2B2B2B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 8.dp))
+            Text(label, color = selFg, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 8.dp))
         }
     }
 }
@@ -372,17 +419,7 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(p.primary), contentAlignment = Alignment.Center) {
-                Ico(Ic.Download, 16.dp, Color.White)
-            }
-            Text("Motion Downloader", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Paste a video link", fontSize = 24.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold)
-            Text("Copy a link from Facebook, YouTube or any video site, then analyze it.", fontSize = 14.sp, color = p.muted)
-        }
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Logo(64.dp) }
 
         s.appUpdate?.let { u ->
             Card(pad = 16.dp) {
@@ -402,50 +439,55 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
         s.updateMsg?.let { Muted(it) }
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(
-                value = s.url, onValueChange = vm::setUrl, modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Paste a video link") }, singleLine = true, shape = RoundedCornerShape(14.dp),
-                trailingIcon = {
+            val ink = if (p.dark) Color.White else Color(0xFF231F20)
+            val capsule = if (p.dark) Color.White else Color(0xFF000000)
+            val knob = if (p.dark) Color(0xFF000000) else Color.White
+            val canGo = !s.analyzing && s.url.isNotBlank()
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(24.dp)).background(if (p.dark) Color(0xFF002D6B) else Color.White)
+                        .border(1.5.dp, ink, RoundedCornerShape(24.dp)).padding(horizontal = 18.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = s.url, onValueChange = vm::setUrl, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        textStyle = androidx.compose.ui.text.TextStyle(color = ink, fontSize = 15.sp),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(ink),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = { if (canGo) vm.analyze() }),
+                        decorationBox = { inner ->
+                            if (s.url.isEmpty()) Text("Paste Link", fontSize = 15.sp, color = p.muted)
+                            inner()
+                        },
+                    )
+                }
+                Row(
+                    Modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).background(capsule).padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Box(
-                        Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) {
+                        Modifier.size(40.dp).clip(CircleShape).background(knob).clickable(role = Role.Button) {
                             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val t = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()
                             if (!t.isNullOrBlank()) vm.setUrl(Urls.normalize(t))
                         },
                         contentAlignment = Alignment.Center,
-                    ) { Ico(Ic.Paste, 18.dp, p.muted) }
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                    focusedBorderColor = p.primary, unfocusedBorderColor = p.border,
-                ),
-            )
-            BigButton(
-                if (s.analyzing) "Analyzing…" else "Analyze", vm::analyze, Modifier.fillMaxWidth().height(42.dp),
-                enabled = !s.analyzing && s.url.isNotBlank(),
-            )
+                    ) { Ico(Ic.Paste, 20.dp, if (p.dark) Color.White else Color(0xFF231F20)) }
+                    Box(
+                        Modifier.size(40.dp).clip(CircleShape).clickable(enabled = canGo, role = Role.Button) { vm.analyze() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (s.analyzing) androidx.compose.material3.CircularProgressIndicator(
+                            Modifier.size(20.dp), strokeWidth = 2.dp, color = if (p.dark) Color(0xFF231F20) else Color.White,
+                        ) else Ico(Ic.Search, 22.dp, (if (p.dark) Color(0xFF231F20) else Color.White).copy(alpha = if (canGo) 1f else 0.45f))
+                    }
+                }
+            }
             if (s.status.isNotBlank() && (s.statusIsError || s.analyzing)) {
                 Text(s.status, color = if (s.statusIsError) p.errFg else p.muted, fontSize = 12.sp)
             }
             if (s.engineError != null) Text("Download engine failed to start: ${s.engineError}", color = p.errFg, fontSize = 12.sp)
             else if (!s.engineReady) Muted("Preparing the download engine…")
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Label("Works with")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Facebook", "YouTube", "Instagram", "TikTok", "X", "Vimeo").forEach { n ->
-                    Box(
-                        Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(p.surface)
-                            .border(1.dp, p.border, RoundedCornerShape(18.dp)).padding(horizontal = 14.dp),
-                        contentAlignment = Alignment.Center,
-                    ) { Text(n, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
-                }
-                Box(
-                    Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(p.tint).padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.Center,
-                ) { Text("Any online video", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = p.onTint) }
-            }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

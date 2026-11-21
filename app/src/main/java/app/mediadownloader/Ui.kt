@@ -49,22 +49,25 @@ class Pal(
     val primary: Color, val tint: Color, val onTint: Color, val soft: Color, val segBg: Color,
     val okBg: Color, val okFg: Color, val errBg: Color, val errFg: Color, val warnBg: Color, val warnFg: Color,
     val scrim: Color,
+    val curve: Color = Color(0xFFB3E4FA), val dark: Boolean = false,
 )
 
 private val LightPal = Pal(
-    bg = Color(0xFFF5F6FA), surface = Color.White, text = Color(0xFF14162B), muted = Color(0xFF5B6078),
-    border = Color(0xFFE3E5EE), primary = Color(0xFF111111), tint = Color(0xFFEDEDED), onTint = Color(0xFF111111),
-    soft = Color(0xFFF5F6FA), segBg = Color(0xFFE9EAF2),
+    bg = Color(0xFFE4F5FD), surface = Color.White, text = Color(0xFF231F20), muted = Color(0xFF5E6B76),
+    border = Color(0xFFB3E4FA), primary = Color(0xFF00AEEF), tint = Color(0xFFB3E4FA), onTint = Color(0xFF231F20),
+    soft = Color(0xFFCFEDFC), segBg = Color(0xFFCFEDFC),
     okBg = Color(0xFFE3F5EC), okFg = Color(0xFF0F7A47), errBg = Color(0xFFFDE8EA), errFg = Color(0xFFBF2433),
-    warnBg = Color(0xFFFFF1D9), warnFg = Color(0xFF8A5200), scrim = Color(0x8C14162B),
+    warnBg = Color(0xFFFFF1D9), warnFg = Color(0xFF8A5200), scrim = Color(0x8C231F20),
+    curve = Color(0xFFB3E4FA), dark = false,
 )
 
 private val DarkPal = Pal(
-    bg = Color(0xFF0F1018), surface = Color(0xFF1A1C28), text = Color(0xFFECEDF5), muted = Color(0xFFA3A8BD),
-    border = Color(0xFF2C2F40), primary = Color(0xFF4A4A4A), tint = Color(0xFF2B2B2B), onTint = Color(0xFFE6E6E6),
-    soft = Color(0xFF23253A), segBg = Color(0xFF23253A),
+    bg = Color(0xFF000033), surface = Color(0xFF5F607B), text = Color.White, muted = Color(0xFFC3CCE6),
+    border = Color(0xFF1B3F7A), primary = Color(0xFF00AEEF), tint = Color(0xFF002D6B), onTint = Color(0xFFCFEDFC),
+    soft = Color(0xFF002D6B), segBg = Color(0xFF002D6B),
     okBg = Color(0xFF12301F), okFg = Color(0xFF6FD9A0), errBg = Color(0xFF3A1A1F), errFg = Color(0xFFFF8A94),
     warnBg = Color(0xFF3A2C10), warnFg = Color(0xFFF5C26B), scrim = Color(0xA0000000),
+    curve = Color(0xFF002D6B), dark = true,
 )
 
 val LocalPal = compositionLocalOf { LightPal }
@@ -133,6 +136,7 @@ object Ic {
     val Link = stroke("M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1 M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1")
     val Paste = stroke("M8 5h8a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z M9 5V4h6v1")
     val Chevron = stroke("m9 6 6 6-6 6")
+    val MoreV = stroke("M12 5h.01 M12 12h.01 M12 19h.01", 3.6f)
     val More = stroke("M5 12h.01 M12 12h.01 M19 12h.01", 3.6f)
     val Play = filled("M8 5v14l11-7z")
     val Retry = stroke("M20 12a8 8 0 1 1-2.3-5.6 M20 4v5h-5")
@@ -257,4 +261,17 @@ fun Thumb(url: String?, w: Dp, h: Dp, radius: Dp = 10.dp, modifier: Modifier = M
     ) {
         if (url != null) AsyncImage(url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
     }
+}
+
+/** The MD logo (navy artwork; white in dark mode). */
+@Composable
+fun Logo(height: Dp, modifier: Modifier = Modifier) {
+    val p = LocalPal.current
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(R.drawable.logo_md),
+        contentDescription = "Motion Downloader",
+        modifier = modifier.height(height),
+        contentScale = ContentScale.Fit,
+        colorFilter = if (p.dark) androidx.compose.ui.graphics.ColorFilter.tint(Color.White) else null,
+    )
 }
