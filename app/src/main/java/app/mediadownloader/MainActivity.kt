@@ -303,8 +303,9 @@ private fun App(vm: MainViewModel) {
             )
         }
         Scaffold(
-            modifier = Modifier.fillMaxSize().background(p.bg),
-            containerColor = Color.Transparent,
+            modifier = Modifier.fillMaxSize(),
+            containerColor = p.bg,
+            contentColor = p.text,
             bottomBar = {
                 if (screen != "result" && screen != "browser") NavBar(screen, hist.count { it.status == "active" || it.status == "pending" }, browserOn) { screen = it }
             },
