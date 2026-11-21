@@ -53,21 +53,21 @@ class Pal(
 )
 
 private val LightPal = Pal(
-    bg = Color(0xFFE4F5FD), surface = Color.White, text = Color(0xFF231F20), muted = Color(0xFF5E6B76),
-    border = Color(0xFFB3E4FA), primary = Color(0xFF00AEEF), tint = Color(0xFFB3E4FA), onTint = Color(0xFF231F20),
-    soft = Color(0xFFCFEDFC), segBg = Color(0xFFCFEDFC),
-    okBg = Color(0xFFE3F5EC), okFg = Color(0xFF0F7A47), errBg = Color(0xFFFDE8EA), errFg = Color(0xFFBF2433),
-    warnBg = Color(0xFFFFF1D9), warnFg = Color(0xFF8A5200), scrim = Color(0x8C231F20),
-    curve = Color(0xFFB3E4FA), dark = false,
+    bg = Color(0xFFF1F1F3), surface = Color.White, text = Color(0xFF111113), muted = Color(0xFF7A7A85),
+    border = Color(0xFFE6E6EA), primary = Color(0xFF111113), tint = Color(0xFFCDE8F1), onTint = Color(0xFF16394A),
+    soft = Color(0xFFF4F4F6), segBg = Color(0xFFE8E8EC),
+    okBg = Color(0xFFD9EBC6), okFg = Color(0xFF2F5D12), errBg = Color(0xFFFBE0DC), errFg = Color(0xFFB3261E),
+    warnBg = Color(0xFFF8EBA8), warnFg = Color(0xFF6B5B00), scrim = Color(0x8C111113),
+    curve = Color(0xFFCDE8F1), dark = false,
 )
 
 private val DarkPal = Pal(
-    bg = Color(0xFF000033), surface = Color(0xFF5F607B), text = Color.White, muted = Color(0xFFC3CCE6),
-    border = Color(0xFF1B3F7A), primary = Color(0xFF00AEEF), tint = Color(0xFF002D6B), onTint = Color(0xFFCFEDFC),
-    soft = Color(0xFF002D6B), segBg = Color(0xFF002D6B),
-    okBg = Color(0xFF12301F), okFg = Color(0xFF6FD9A0), errBg = Color(0xFF3A1A1F), errFg = Color(0xFFFF8A94),
-    warnBg = Color(0xFF3A2C10), warnFg = Color(0xFFF5C26B), scrim = Color(0xA0000000),
-    curve = Color(0xFF002D6B), dark = true,
+    bg = Color(0xFF0F0F12), surface = Color(0xFF1C1C21), text = Color(0xFFF2F2F5), muted = Color(0xFF9A9AA6),
+    border = Color(0xFF2A2A31), primary = Color(0xFF3B86A8), tint = Color(0xFF1F3A47), onTint = Color(0xFFBFE6F5),
+    soft = Color(0xFF26262C), segBg = Color(0xFF26262C),
+    okBg = Color(0xFF25361A), okFg = Color(0xFFBFE39A), errBg = Color(0xFF3A1A1F), errFg = Color(0xFFFF8A94),
+    warnBg = Color(0xFF3A3410), warnFg = Color(0xFFF3E08A), scrim = Color(0xA0000000),
+    curve = Color(0xFF1F3A47), dark = true,
 )
 
 val LocalPal = compositionLocalOf { LightPal }
@@ -155,8 +155,7 @@ fun Ico(v: ImageVector, size: Dp = 18.dp, tint: Color = LocalPal.current.text) =
 fun Card(modifier: Modifier = Modifier, pad: Dp = 12.dp, gap: Dp = 10.dp, content: @Composable () -> Unit) {
     val p = LocalPal.current
     Column(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.surface)
-            .border(1.dp, p.border, RoundedCornerShape(16.dp)).padding(pad),
+        modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(p.surface).padding(pad),
         verticalArrangement = Arrangement.spacedBy(gap),
     ) { content() }
 }

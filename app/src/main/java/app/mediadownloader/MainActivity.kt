@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
@@ -302,7 +303,7 @@ private fun App(vm: MainViewModel) {
             )
         }
         Scaffold(
-            modifier = Modifier.fillMaxSize().background(p.bg).drawBehind { drawCurves(p.curve) },
+            modifier = Modifier.fillMaxSize().background(p.bg),
             containerColor = Color.Transparent,
             bottomBar = {
                 if (screen != "result") NavBar(screen, hist.count { it.status == "active" || it.status == "pending" }, browserOn) { screen = it }
@@ -333,8 +334,11 @@ private fun App(vm: MainViewModel) {
 }
 
 /** Soft curved bands at the top and bottom of the screen (from the design). */
+internal fun Modifier.androidxShadow(e: androidx.compose.ui.unit.Dp, s: androidx.compose.ui.graphics.Shape) =
+    this.shadow(e, s, clip = false, ambientColor = Color(0x33000000), spotColor = Color(0x33000000))
+
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCurves(
-    c: Color, topEdge: androidx.compose.ui.unit.Dp = 92.dp, topCenter: androidx.compose.ui.unit.Dp = 120.dp,
+    c: Color, topEdge: androidx.compose.ui.unit.Dp = 92.dp, topCenter: androidx.compose.ui.unit.Dp = 120.dp, bottom: Boolean = true,
 ) {
     val w = size.width; val h = size.height
     val te = topEdge.toPx(); val tc = topCenter.toPx()
@@ -342,6 +346,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCurves(
         moveTo(0f, 0f); lineTo(w, 0f); lineTo(w, te)
         quadraticBezierTo(w / 2, 2 * tc - te, 0f, te); close()
     }, c)
+    if (!bottom) return
     val be = 84.dp.toPx(); val bc = 108.dp.toPx()
     drawPath(androidx.compose.ui.graphics.Path().apply {
         moveTo(0f, h); lineTo(w, h); lineTo(w, h - be)
@@ -352,10 +357,11 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCurves(
 @Composable
 private fun NavBar(cur: String, running: Int, browserOn: Boolean, onNav: (String) -> Unit) {
     // floating dark pill; the selected item is a white pill with icon + name
-    val dk = LocalPal.current.dark
+    val pp = LocalPal.current
     Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 10.dp)) {
         Row(
-            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp)).background(if (dk) Color.White else Color(0xFF000000)).padding(6.dp),
+            Modifier.fillMaxWidth().height(60.dp)
+                .androidxShadow(10.dp, RoundedCornerShape(30.dp)).clip(RoundedCornerShape(30.dp)).background(pp.surface).padding(6.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             NavItem("Home", Ic.Home, cur == "home") { onNav("home") }
@@ -372,9 +378,9 @@ private fun androidx.compose.foundation.layout.RowScope.NavItem(
 ) {
     // the selected item grows, turns white and shows its name - all animated
     val dk = LocalPal.current.dark
-    val selBg = if (dk) Color(0xFF000000) else Color.White
-    val selFg = if (dk) Color.White else Color(0xFF231F20)
-    val offFg = if (dk) Color(0xFF231F20) else Color.White
+    val selBg = if (dk) Color(0xFFF2F2F5) else Color(0xFF111113)
+    val selFg = if (dk) Color(0xFF111113) else Color.White
+    val offFg = if (dk) Color(0xFFB5B5C0) else Color(0xFF55555F)
     val w by androidx.compose.animation.core.animateFloatAsState(
         if (selected) 2.4f else 1f, androidx.compose.animation.core.tween(280), label = "w",
     )
@@ -395,7 +401,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavItem(
                 Text(
                     badge, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.TopEnd).padding(start = 14.dp)
-                        .clip(RoundedCornerShape(8.dp)).background(Color(0xFF00AEEF)).padding(horizontal = 4.dp),
+                        .clip(RoundedCornerShape(8.dp)).background(Color(0xFFE9967A)).padding(horizontal = 4.dp),
                 )
             }
         }
@@ -421,8 +427,14 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
         Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Logo(46.dp) }
-        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(46.dp).clip(CircleShape).background(p.surface), contentAlignment = Alignment.Center) { Logo(20.dp) }
+            Column(Modifier.weight(1f)) {
+                Text("Hello!", fontSize = 12.sp, color = p.muted)
+                Text("Motion Downloader", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Text("Download any\nvideo, fast", fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold)
 
         s.appUpdate?.let { u ->
             Card(pad = 16.dp) {
@@ -441,15 +453,18 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
         }
         s.updateMsg?.let { Muted(it) }
 
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(p.tint).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Paste a link", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = p.onTint)
             val ink = if (p.dark) Color.White else Color(0xFF231F20)
             val capsule = if (p.dark) Color.White else Color(0xFF000000)
             val knob = if (p.dark) Color(0xFF000000) else Color.White
             val canGo = !s.analyzing && s.url.isNotBlank()
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
-                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(24.dp)).background(if (p.dark) Color(0xFF002D6B) else Color.White)
-                        .border(1.5.dp, ink, RoundedCornerShape(24.dp)).padding(horizontal = 18.dp),
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(24.dp)).background(p.surface).padding(horizontal = 18.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     androidx.compose.foundation.text.BasicTextField(
@@ -500,7 +515,7 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
     val pillFg = if (p.dark) Color(0xFF000000) else Color.White
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Recent", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text("Recent", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Box(Modifier.height(36.dp).clickable(role = Role.Button, onClick = onSeeAll), contentAlignment = Alignment.CenterEnd) {
                 Text("See all", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
@@ -512,10 +527,10 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
         } else {
             val fmt = remember { java.text.SimpleDateFormat("d MMM. h:mma", java.util.Locale.getDefault()) }
             Row(
-                Modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.5.dp, ink, shape).padding(6.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(p.surface).padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Thumb(d.thumb, 64.dp, 56.dp, 12.dp)
+                Thumb(d.thumb, 68.dp, 60.dp, 16.dp)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(d.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
@@ -523,7 +538,7 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
                         fontSize = 10.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (d.status == "done") Pill("Downloaded", pillBg, pillFg) else StatusPill(d)
+                        if (d.status == "done") Pill("Downloaded", p.okBg, p.okFg) else StatusPill(d)
                         Spacer(Modifier.weight(1f))
                         if (d.status == "done") Box(
                             Modifier.height(26.dp).clip(RoundedCornerShape(13.dp)).background(pillBg)

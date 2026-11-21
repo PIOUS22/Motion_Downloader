@@ -1,6 +1,9 @@
 # Changelog
 
 ## What's new
+- New soft design: pastel cards, rounded shapes, new bottom bar and Home screen
+- YouTube links are analysed much faster, and the same link opens instantly the second time
+- Browser: website pop-ups at the bottom are no longer hidden by the bottom bar
 - New app icon (MD logo)
 - Home: Recent download card at the bottom, thinner curved bands
 - Browser: page header no longer hidden under the curve

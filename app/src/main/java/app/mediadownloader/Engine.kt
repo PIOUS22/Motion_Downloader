@@ -102,8 +102,16 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
 
     // ---------------------------------------------------------------- analyse
 
-    private fun json(url: String, cookies: String?, vararg flags: String): JSONObject {
+    /** YouTube: the phone/TV player clients answer much faster (no player script to solve). */
+    private fun youtubeFast(url: String, cookies: String?): JSONObject? = runCatching {
+        val j = json(url, cookies, "--no-playlist", extra = "--extractor-args" to "youtube:player_client=android_vr,tv")
+        val ok = j.optJSONArray("formats")?.objects()?.any { f -> f.str("vcodec")?.let { it != "none" } == true } == true
+        if (ok) j else null
+    }.getOrNull()
+
+    private fun json(url: String, cookies: String?, vararg flags: String, extra: Pair<String, String>? = null): JSONObject {
         val req = YoutubeDLRequest(url)
+        if (extra != null) req.addOption(extra.first, extra.second)
         req.addOption("-J")
         req.addOption("--no-warnings")
         req.addOption("--socket-timeout", 20)
@@ -150,7 +158,19 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
         return null
     }
 
+    private val cache = object : LinkedHashMap<String, Pair<Long, Analysis>>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, Analysis>>) = size > 8
+    }
+
+    /** Same link analysed again within 10 minutes: answer at once. */
     fun analyze(url: String, cookies: String?): Analysis {
+        synchronized(cache) { cache[url]?.takeIf { System.currentTimeMillis() - it.first < 600_000 } }?.let { return it.second }
+        val a = analyzeFresh(url, cookies)
+        synchronized(cache) { cache[url] = System.currentTimeMillis() to a }
+        return a
+    }
+
+    private fun analyzeFresh(url: String, cookies: String?): Analysis {
         val yt = Urls.isYoutube(url)
         val (listId, videoId) = if (yt) Urls.youtubeIds(url) else (null to null)
 
@@ -168,7 +188,7 @@ class Engine(private val ctx: Context, private val processId: String = PROCESS_I
             val plThread = if (purl != null) Thread {
                 plResult = runCatching { json(purl, cookies, "--flat-playlist") }
             }.also { it.start() } else null
-            info = json(url, cookies, "--no-playlist")
+            info = youtubeFast(url, cookies) ?: json(url, cookies, "--no-playlist")
             if (purl != null) {                          // video inside a playlist -> offer both
                 playlistUrl = purl                       // always offer the playlist; entries load on demand
                 plThread?.join()

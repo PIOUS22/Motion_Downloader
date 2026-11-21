@@ -333,7 +333,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                     Box(Modifier.fillMaxWidth(tab.progress / 100f).height(3.dp).background(p.primary))
                 }
             }
-            Box(Modifier.weight(1f).fillMaxWidth().padding(bottom = if (webShown) 0.dp else pad.calculateBottomPadding())) {
+            Box(Modifier.weight(1f).fillMaxWidth().padding(bottom = pad.calculateBottomPadding())) {
                 if (b.showTabs) {
                     TabList(b)
                 } else if (b.showHistory) {
@@ -433,23 +433,21 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                 }
                 if (!b.showTabs && !b.showHistory && tab.isPage() && tab.hasVideo) {
                     Box(
-                        Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + pad.calculateBottomPadding()).size(52.dp).clip(CircleShape)
+                        Modifier.align(Alignment.BottomEnd).padding(16.dp).size(52.dp).clip(CircleShape)
                             .background(p.primary).clickable(role = Role.Button) { onDownloadPage(tab.url) },
                         contentAlignment = Alignment.Center,
                     ) { Ico(Ic.Download, 20.dp, Color.White) }
                 }
             }
         }
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) { drawCurves(p.curve, topPad + 74.dp, topPad + 84.dp) }
         Box(Modifier.padding(top = topPad)) {
             // top toolbar (pill)
-            val ink = Color(0xFF231F20)
+            val ink = p.text
             val dim = Color(0xFF9AA5B1)
             Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
                 Row(
-                    Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp))
-                        .background(if (p.dark) Color(0xFFCFEDFC) else p.bg)
-                        .border(1.5.dp, Color(0xFF00AEEF), RoundedCornerShape(26.dp)).padding(horizontal = 6.dp),
+                    Modifier.fillMaxWidth().height(52.dp).androidxShadow(8.dp, RoundedCornerShape(26.dp))
+                        .clip(RoundedCornerShape(26.dp)).background(p.surface).padding(horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Box(
@@ -469,7 +467,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                         contentAlignment = Alignment.Center,
                     ) { Ico(Ic.Forward, 20.dp, if (tab.canForward) ink else dim) }
                     Row(
-                        Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(19.dp)).background(Color.White)
+                        Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(19.dp)).background(p.soft)
                             .clickable(role = Role.Button) { b.showTabs = false; b.showHistory = false; field = if (tab.isPage()) tab.url else ""; addr = true }
                             .padding(start = 14.dp, end = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -484,7 +482,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                     Box(
                         Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) { b.showHistory = false; b.showTabs = !b.showTabs },
                         contentAlignment = Alignment.Center,
-                    ) { Text(b.tabs.size.toString(), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = if (b.showTabs) Color(0xFF00AEEF) else ink) }
+                    ) { Text(b.tabs.size.toString(), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = if (b.showTabs) p.primary else ink) }
                     Box(Modifier.width(1.5.dp).height(22.dp).background(ink.copy(alpha = 0.5f)))
                     Box {
                         Box(
