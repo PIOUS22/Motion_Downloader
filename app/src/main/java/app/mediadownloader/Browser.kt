@@ -140,6 +140,7 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
             override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {
                 url = pageUrl ?: url
                 atTop = true
+                if (AdBlock.enabled) view?.evaluateJavascript(AdBlock.POPUP_JS, null)
                 view?.evaluateJavascript(trackScroll, null)
                 sync(view)
             }
@@ -149,7 +150,7 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
                 title = view?.title ?: title
                 swipe.isRefreshing = false
                 view?.evaluateJavascript(trackScroll, null)
-                if (AdBlock.enabled) view?.evaluateJavascript(AdBlock.HIDE_JS, null)
+                if (AdBlock.enabled) { view?.evaluateJavascript(AdBlock.POPUP_JS, null); view?.evaluateJavascript(AdBlock.HIDE_JS, null) }
                 BrowserHistory.add(pageUrl, view?.title)
                 sync(view)
             }
@@ -183,7 +184,7 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
 
             // pop-ups: blocked unless you tapped something; an allowed one opens in this same tab
             override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message?): Boolean {
-                if (AdBlock.enabled && !isUserGesture) return false
+                if (AdBlock.enabled) return false          // ads open pop-ups from your taps; real links open in this tab
                 val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
                 val tmp = WebView(ctx)
                 tmp.webViewClient = object : WebViewClient() {

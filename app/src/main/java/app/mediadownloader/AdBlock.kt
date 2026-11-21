@@ -60,4 +60,10 @@ object AdBlock {
         "iframe[id^=\"google_ads\"],.adsbygoogle,.ad-banner,.ad-container,.advert,.advertisement,[aria-label=\"Advertisement\"]," +
         "[data-ad-slot],[data-google-query-id]{display:none!important}';" +
         "(document.head||document.documentElement).appendChild(s)}catch(e){}})()"
+
+    /** Scripts can no longer open pop-ups (ads hijack your tap that way); "open in new tab" links open in this tab. */
+    const val POPUP_JS = "(function(){try{if(window.__mdPop)return;window.__mdPop=1;" +
+        "window.open=function(){return null};" +
+        "document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a'):null;" +
+        "if(a&&a.target&&a.target!=='_self'&&a.target!=='_top'&&a.target!=='_parent'){a.target='_self'}},true)}catch(e){}})()"
 }

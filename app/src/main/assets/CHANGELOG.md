@@ -1,6 +1,7 @@
 # Changelog
 
 ## What's new
+- Ad blocker: tapping a link no longer opens an ad instead
 - Browser: ad blocker (ads, trackers and pop-ups); switch it on or off in the three-dot menu
 - Browser button is now at the top left of Home; the bottom bar hides while browsing
 - Browser menu: new "Return to home screen"; the back button also leaves the browser
