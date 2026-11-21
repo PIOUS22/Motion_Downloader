@@ -324,6 +324,60 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
     LaunchedEffect(addr) { if (addr) runCatching { addrFocus.requestFocus() } }
 
     Column(Modifier.fillMaxSize().padding(pad)) {
+        // top toolbar
+        Row(
+            Modifier.fillMaxWidth().height(60.dp).background(p.bg).padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).clickable(enabled = tab.canBack, role = Role.Button) {
+                    if (tab.web.canGoBack()) tab.web.goBack()
+                },
+                contentAlignment = Alignment.Center,
+            ) { Ico(Ic.Back, 22.dp, if (tab.canBack) p.text else p.border) }
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).clickable(enabled = tab.canForward, role = Role.Button) { tab.web.goForward() },
+                contentAlignment = Alignment.Center,
+            ) { Ico(Ic.Forward, 22.dp, if (tab.canForward) p.text else p.border) }
+            Row(
+                Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(20.dp)).background(p.soft)
+                    .clickable(role = Role.Button) { b.showTabs = false; b.showHistory = false; field = if (tab.isPage()) tab.url else ""; addr = true },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+            ) {
+                if (tab.isPage()) {
+                    Text(
+                        runCatching { Uri.parse(tab.url).host?.removePrefix("www.") }.getOrNull() ?: tab.url,
+                        fontSize = 13.sp, color = p.text, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                } else Ico(Ic.Search, 20.dp, p.muted)
+            }
+            Box(
+                Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))
+                    .background(if (b.showTabs) p.tint else Color.Transparent)
+                    .border(2.dp, if (b.showTabs) p.primary else p.text, RoundedCornerShape(9.dp))
+                    .clickable(role = Role.Button) { b.showHistory = false; b.showTabs = !b.showTabs },
+                contentAlignment = Alignment.Center,
+            ) { Text(b.tabs.size.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (b.showTabs) p.onTint else p.text) }
+            Box {
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button) { menu = true },
+                    contentAlignment = Alignment.Center,
+                ) { Ico(Ic.Dots4, 22.dp, p.text) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("New tab") }, onClick = { menu = false; b.addTab() })
+                    DropdownMenuItem(text = { Text("Reload") }, onClick = { menu = false; if (tab.started) tab.web.reload() })
+                    DropdownMenuItem(text = { Text("Copy link") }, enabled = tab.isPage(), onClick = {
+                        menu = false
+                        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("link", tab.url))
+                        Toast.makeText(ctx, "Link copied", Toast.LENGTH_SHORT).show()
+                    })
+                    DropdownMenuItem(text = { Text("History") }, onClick = { menu = false; b.showTabs = false; b.showHistory = true })
+                    DropdownMenuItem(text = { Text("Start page") }, onClick = { menu = false; b.showHistory = false; tab.showStartPage(); field = "" })
+                    DropdownMenuItem(text = { Text("Close tab") }, onClick = { menu = false; b.closeTab(b.index) })
+                }
+            }
+        }
         if (tab.started && tab.progress in 1..99) {
             Box(Modifier.fillMaxWidth().height(3.dp).background(p.border)) {
                 Box(Modifier.fillMaxWidth(tab.progress / 100f).height(3.dp).background(p.primary))
@@ -458,60 +512,6 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                         ),
                     )
                     TextButton(onClick = { addr = false; focus.clearFocus() }) { Text("Cancel") }
-                }
-            }
-        }
-        // bottom toolbar
-        Row(
-            Modifier.fillMaxWidth().height(60.dp).background(p.bg).padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).clickable(enabled = tab.canBack, role = Role.Button) {
-                    if (tab.web.canGoBack()) tab.web.goBack()
-                },
-                contentAlignment = Alignment.Center,
-            ) { Ico(Ic.Back, 22.dp, if (tab.canBack) p.text else p.border) }
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).clickable(enabled = tab.canForward, role = Role.Button) { tab.web.goForward() },
-                contentAlignment = Alignment.Center,
-            ) { Ico(Ic.Forward, 22.dp, if (tab.canForward) p.text else p.border) }
-            Row(
-                Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(20.dp)).background(p.soft)
-                    .clickable(role = Role.Button) { b.showTabs = false; b.showHistory = false; field = if (tab.isPage()) tab.url else ""; addr = true },
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
-            ) {
-                if (tab.isPage()) {
-                    Text(
-                        runCatching { Uri.parse(tab.url).host?.removePrefix("www.") }.getOrNull() ?: tab.url,
-                        fontSize = 13.sp, color = p.text, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp),
-                    )
-                } else Ico(Ic.Search, 20.dp, p.muted)
-            }
-            Box(
-                Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))
-                    .background(if (b.showTabs) p.tint else Color.Transparent)
-                    .border(2.dp, if (b.showTabs) p.primary else p.text, RoundedCornerShape(9.dp))
-                    .clickable(role = Role.Button) { b.showHistory = false; b.showTabs = !b.showTabs },
-                contentAlignment = Alignment.Center,
-            ) { Text(b.tabs.size.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (b.showTabs) p.onTint else p.text) }
-            Box {
-                Box(
-                    Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button) { menu = true },
-                    contentAlignment = Alignment.Center,
-                ) { Ico(Ic.Dots4, 22.dp, p.text) }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("New tab") }, onClick = { menu = false; b.addTab() })
-                    DropdownMenuItem(text = { Text("Reload") }, onClick = { menu = false; if (tab.started) tab.web.reload() })
-                    DropdownMenuItem(text = { Text("Copy link") }, enabled = tab.isPage(), onClick = {
-                        menu = false
-                        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("link", tab.url))
-                        Toast.makeText(ctx, "Link copied", Toast.LENGTH_SHORT).show()
-                    })
-                    DropdownMenuItem(text = { Text("History") }, onClick = { menu = false; b.showTabs = false; b.showHistory = true })
-                    DropdownMenuItem(text = { Text("Start page") }, onClick = { menu = false; b.showHistory = false; tab.showStartPage(); field = "" })
-                    DropdownMenuItem(text = { Text("Close tab") }, onClick = { menu = false; b.closeTab(b.index) })
                 }
             }
         }
