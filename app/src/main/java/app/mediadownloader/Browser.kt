@@ -37,6 +37,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -85,6 +87,19 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
     var canForward by mutableStateOf(false)
     var started by mutableStateOf(false)
     var hasVideo by mutableStateOf(false)
+    var customShown by mutableStateOf(false)
+    private var customView: android.view.View? = null
+    private var customCb: WebChromeClient.CustomViewCallback? = null
+
+    fun exitCustom() {
+        val act = ctx as? android.app.Activity ?: return
+        val v = customView ?: return
+        runCatching { (act.window.decorView as android.view.ViewGroup).removeView(v) }
+        customCb?.onCustomViewHidden()
+        customView = null; customCb = null; customShown = false
+        act.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        BPrefs.applyBars(act)
+    }
 
     val web: WebView = WebView(ctx).apply {
         settings.javaScriptEnabled = true
@@ -177,7 +192,14 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
                 val u = request?.url ?: return false
                 if (AdBlock.enabled && AdBlock.blocked(u)) return true      // redirect to an ad site
                 if (u.scheme == "http" || u.scheme == "https") return false
-                // app links (intent:, fb:, ...) are not opened: stay in the browser
+                // app links (intent:, fb:, ...): blocked unless you allowed them in the settings
+                if (BPrefs.str(ctx, "ext", "block") == "allow") {
+                    runCatching {
+                        val i = if (u.scheme == "intent") Intent.parseUri(u.toString(), Intent.URI_INTENT_SCHEME) else Intent(Intent.ACTION_VIEW, u)
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        ctx.startActivity(i)
+                    }
+                }
                 return true
             }
         }
@@ -205,6 +227,22 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
                 return true
             }
 
+            // video full screen (the full-screen button inside a web video)
+            override fun onShowCustomView(view: android.view.View?, cb: CustomViewCallback?) {
+                val act = ctx as? android.app.Activity
+                if (act == null || view == null) { cb?.onCustomViewHidden(); return }
+                if (customView != null) exitCustom()
+                customView = view; customCb = cb; customShown = true
+                (act.window.decorView as android.view.ViewGroup).addView(
+                    view, android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT),
+                )
+                androidx.core.view.WindowCompat.getInsetsController(act.window, act.window.decorView)
+                    .hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                if (BPrefs.bool(ctx, "landscape", true)) act.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+
+            override fun onHideCustomView() { exitCustom() }
+
             override fun onReceivedTitle(view: WebView?, t: String?) {
                 if (!t.isNullOrBlank()) title = t
             }
@@ -229,7 +267,10 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
             else -> BPrefs.searchUrl(ctx, t)
         }
         started = true
-        web.loadUrl(target)
+        val hdr = HashMap<String, String>()
+        if (BPrefs.bool(ctx, "dnt", false)) hdr["DNT"] = "1"
+        if (BPrefs.bool(ctx, "savedata", false)) hdr["Save-Data"] = "on"
+        if (hdr.isEmpty()) web.loadUrl(target) else web.loadUrl(target, hdr)
     }
 
     /** Home button: the homepage from the settings, or the start page. */
@@ -341,6 +382,19 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
     LaunchedEffect(tab.id, tab.url) { if (!editing) field = tab.url }
     BPrefs.version
     LaunchedEffect(BPrefs.version, p.dark, b.tabs.size) { b.applySettings(p.dark) }
+    // status bar / full screen while browsing
+    DisposableEffect(BPrefs.version) {
+        (ctx as? android.app.Activity)?.let { BPrefs.applyBars(it) }
+        onDispose { (ctx as? android.app.Activity)?.let { a ->
+            androidx.core.view.WindowCompat.getInsetsController(a.window, a.window.decorView).show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        } }
+    }
+    // pages are reloaded when a setting that needs it was changed
+    var openVer by remember { mutableIntStateOf(0) }
+    LaunchedEffect(b.showSettings) {
+        if (b.showSettings) openVer = BPrefs.version
+        else if (BPrefs.version != openVer && tab.started) tab.web.reload()
+    }
     LaunchedEffect(tab.id) { tab.web.onResume() }
     DisposableEffect(tab.id) { onDispose { if (BPrefs.pauseTimers(ctx)) runCatching { tab.web.onPause() } } }
     // Is a video open on this page? (checked every 1.5 s because many sites change pages without reloading)
@@ -354,7 +408,14 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
         tab.hasVideo = false
     }
     b.offer?.let { o ->
-        FileOfferDialog(o, onClose = { b.offer = null }) { name, wifi, retry, start ->
+        if (BPrefs.bool(ctx, "skipedit", false)) {
+            LaunchedEffect(o) {
+                val cookie = CookieManager.getInstance().getCookie(o.url)
+                DownloadQueue.enqueue(ctx, newFileJob(o.url, o.name, o.length, o.ua, cookie, AppPrefs.wifiOnly(ctx), true), true)
+                Toast.makeText(ctx, "Download started", Toast.LENGTH_SHORT).show()
+                b.offer = null
+            }
+        } else FileOfferDialog(o, onClose = { b.offer = null }) { name, wifi, retry, start ->
             val cookie = CookieManager.getInstance().getCookie(o.url)
             DownloadQueue.enqueue(ctx, newFileJob(o.url, name, o.length, o.ua, cookie, wifi, retry), start)
             Toast.makeText(ctx, if (start) "Download started" else "Added to Downloads (press Resume to start)", Toast.LENGTH_SHORT).show()
@@ -378,27 +439,31 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
             })
         }.onFailure { Toast.makeText(ctx, "Voice search is not available", Toast.LENGTH_SHORT).show() }
     }
-    androidx.activity.compose.BackHandler(enabled = !addr) {
+    androidx.activity.compose.BackHandler(enabled = tab.customShown) { tab.exitCustom() }
+    androidx.activity.compose.BackHandler(enabled = !addr && !tab.customShown) {
         if (b.showSettings) { if (b.settingsPage.isNotEmpty()) b.settingsPage = "" else b.showSettings = false }
         else if (b.showTabs) b.showTabs = false
         else if (b.showHistory) b.showHistory = false
         else if (tab.started && tab.web.canGoBack()) tab.web.goBack()
+        else if (BPrefs.str(ctx, "backact", "tab") == "tab" && b.tabs.size > 1) b.closeTab(b.index)
         else onHome()
     }
     androidx.activity.compose.BackHandler(enabled = addr) { addr = false; focus.clearFocus() }
     LaunchedEffect(addr) { if (addr) runCatching { addrFocus.requestFocus() } }
 
     val topPad = pad.calculateTopPadding()
+    val bottomBar = BPrefs.bool(ctx, "bottombar", false)
+    val dlInBar = BPrefs.str(ctx, "dlbtn", "float") == "bar"
     val webShown = tab.started && !b.showTabs && !b.showHistory
     Box(Modifier.fillMaxSize()) {
         // page (runs under the curved bands, like the design)
-        Column(Modifier.fillMaxSize().padding(top = topPad + 84.dp)) {
+        Column(Modifier.fillMaxSize().padding(top = if (bottomBar) topPad else topPad + 84.dp, bottom = if (bottomBar) 84.dp + pad.calculateBottomPadding() else 0.dp)) {
             if (tab.started && tab.progress in 1..99) {
                 Box(Modifier.fillMaxWidth().height(3.dp).background(p.border)) {
                     Box(Modifier.fillMaxWidth(tab.progress / 100f).height(3.dp).background(p.primary))
                 }
             }
-            Box(Modifier.weight(1f).fillMaxWidth().padding(bottom = pad.calculateBottomPadding())) {
+            Box(Modifier.weight(1f).fillMaxWidth().padding(bottom = if (bottomBar) 0.dp else pad.calculateBottomPadding())) {
                 if (b.showSettings) {
                     BrowserSettingsScreen(
                         page = b.settingsPage, onPage = { b.settingsPage = it }, onClose = { b.showSettings = false },
@@ -501,7 +566,15 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                         )
                     }
                 }
-                if (!b.showTabs && !b.showHistory && tab.isPage() && tab.hasVideo) {
+                if (BPrefs.bool(ctx, "homefab", false) && !b.showSettings) {
+                    Box(
+                        Modifier.align(if (BPrefs.bool(ctx, "homefabl", false)) Alignment.BottomStart else Alignment.BottomCenter)
+                            .padding(16.dp).size(46.dp).clip(CircleShape).background(p.surface)
+                            .clickable(role = Role.Button) { onHome() },
+                        contentAlignment = Alignment.Center,
+                    ) { Ico(Ic.Home, 20.dp, p.text) }
+                }
+                if (!dlInBar && !b.showTabs && !b.showHistory && !b.showSettings && tab.isPage() && tab.hasVideo) {
                     Box(
                         Modifier.align(Alignment.BottomEnd).padding(16.dp).size(52.dp).clip(CircleShape)
                             .background(p.primary).clickable(role = Role.Button) { onDownloadPage(tab.url) },
@@ -510,7 +583,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                 }
             }
         }
-        Box(Modifier.padding(top = topPad)) {
+        Box(Modifier.align(if (bottomBar) Alignment.BottomCenter else Alignment.TopStart).padding(top = if (bottomBar) 0.dp else topPad, bottom = if (bottomBar) pad.calculateBottomPadding() else 0.dp)) {
             // top toolbar (pill)
             val ink = p.text
             val dim = Color(0xFF9AA5B1)
@@ -538,7 +611,18 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                     ) { Ico(Ic.Forward, 20.dp, if (tab.canForward) ink else dim) }
                     Row(
                         Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(19.dp)).background(p.soft)
-                            .clickable(role = Role.Button) { b.showTabs = false; b.showHistory = false; field = if (tab.isPage()) tab.url else ""; addr = true }
+                            .clickable(role = Role.Button) { b.showTabs = false; b.showHistory = false; b.showSettings = false; field = if (tab.isPage()) tab.url else ""; addr = true }
+                            .pointerInput(b.tabs.size) {
+                                var dx = 0f
+                                detectHorizontalDragGestures(
+                                    onDragStart = { dx = 0f },
+                                    onHorizontalDrag = { _, d -> dx += d },
+                                    onDragEnd = {
+                                        if (BPrefs.bool(ctx, "swipetab", true) && kotlin.math.abs(dx) > 100f && b.tabs.size > 1)
+                                            b.select((b.index + if (dx < 0) 1 else -1).coerceIn(0, b.tabs.lastIndex))
+                                    },
+                                )
+                            }
                             .padding(start = 14.dp, end = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -549,10 +633,15 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                         )
                         Ico(Ic.Search, 18.dp, dim)
                     }
-                    Box(
-                        Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) { b.showHistory = false; b.showSettings = false; b.showTabs = !b.showTabs },
+                    if (dlInBar && tab.isPage() && tab.hasVideo) Box(
+                        Modifier.size(34.dp).clip(CircleShape).background(p.primary).clickable(role = Role.Button) { onDownloadPage(tab.url) },
                         contentAlignment = Alignment.Center,
-                    ) { Text(b.tabs.size.toString(), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = if (b.showTabs) p.primary else ink) }
+                    ) { Ico(Ic.Download, 18.dp, Color.White) }
+                    val numTxt = if (BPrefs.bool(ctx, "tabnum", false)) "${b.index + 1}/${b.tabs.size}" else b.tabs.size.toString()
+                    Box(
+                        Modifier.size(width = if (numTxt.length > 2) 42.dp else 34.dp, height = 34.dp).clip(CircleShape).clickable(role = Role.Button) { b.showHistory = false; b.showSettings = false; b.showTabs = !b.showTabs },
+                        contentAlignment = Alignment.Center,
+                    ) { Text(numTxt, fontSize = if (numTxt.length > 2) 13.sp else 17.sp, fontWeight = FontWeight.Medium, color = if (b.showTabs) p.primary else ink) }
                     Box(Modifier.width(1.5.dp).height(22.dp).background(ink.copy(alpha = 0.5f)))
                     Box {
                         Box(
@@ -582,7 +671,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                 }
             }
         }
-        Box(Modifier.padding(top = topPad + 68.dp)) {
+        Box(Modifier.padding(top = if (bottomBar) topPad else topPad + 68.dp)) {
                 if (addr) {
                     Row(
                         Modifier.fillMaxWidth().background(p.bg).padding(horizontal = 12.dp, vertical = 8.dp),

@@ -84,6 +84,7 @@ object BPrefs {
             s.setSupportZoom(bool(ctx, "zoom", true))
             s.builtInZoomControls = bool(ctx, "zoom", true)
             s.displayZoomControls = false
+            s.layoutAlgorithm = if (bool(ctx, "reflow", false)) WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING else WebSettings.LayoutAlgorithm.NORMAL
             s.defaultTextEncodingName = str(ctx, "enc", "UTF-8")
             s.userAgentString = if (str(ctx, "ua", "default") == "desktop") DESKTOP_UA else WebSettings.getDefaultUserAgent(ctx)
             if (Build.VERSION.SDK_INT >= 26) s.safeBrowsingEnabled = bool(ctx, "safe", true)
@@ -94,6 +95,19 @@ object BPrefs {
             val dark = when (str(ctx, "dark", "theme")) { "on" -> true; "off" -> false; else -> appDark }
             if (Build.VERSION.SDK_INT >= 33) s.isAlgorithmicDarkeningAllowed = dark
             else if (Build.VERSION.SDK_INT >= 29) s.forceDark = if (dark) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
+        }
+    }
+
+    /** Status bar / full screen while the browser is open. */
+    fun applyBars(act: android.app.Activity) {
+        val ctrl = androidx.core.view.WindowCompat.getInsetsController(act.window, act.window.decorView)
+        val full = bool(act, "full", false)
+        val hide = bool(act, "hidestatus", false)
+        ctrl.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        when {
+            full -> ctrl.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            hide -> { ctrl.show(androidx.core.view.WindowInsetsCompat.Type.navigationBars()); ctrl.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars()) }
+            else -> ctrl.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         }
     }
 
@@ -220,7 +234,7 @@ fun BrowserSettingsScreen(page: String, onPage: (String) -> Unit, onClose: () ->
     Column(Modifier.fillMaxSize().background(p.bg)) {
         val title = when (page) {
             "general" -> "General settings"; "display" -> "Display settings"; "privacy" -> "Privacy settings"
-            "perm" -> "Website permissions"; "adv" -> "Advanced settings"; else -> "Browser settings"
+            "perm" -> "Website permissions"; "adv" -> "Advanced settings"; "acc" -> "Accessibility settings"; else -> "Browser settings"
         }
         Head(title) { if (page.isEmpty()) onClose() else onPage("") }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
@@ -230,6 +244,7 @@ fun BrowserSettingsScreen(page: String, onPage: (String) -> Unit, onClose: () ->
                     Act("Display settings", "Dark mode, text size, zoom, viewport") { onPage("display") }
                     Act("Privacy settings", "Cookies, clear data on exit, SSL") { onPage("privacy") }
                     Act("Website permissions", "New windows and ad / pop-up blocker") { onPage("perm") }
+                    Act("Accessibility settings", "Address bar position, tab swipe, back button, quick buttons") { onPage("acc") }
                     Act("Advanced settings", "Encoding, rendering mode, safe browsing") { onPage("adv") }
                 }
                 "general" -> {
@@ -239,9 +254,18 @@ fun BrowserSettingsScreen(page: String, onPage: (String) -> Unit, onClose: () ->
                     Pick(ctx, "ua", "default", "User agent", listOf(Opt("default", "Default (phone)"), Opt("desktop", "Desktop site")))
                     Sw(ctx, "noimg", false, "Block images", "Pages load faster and use less data")
                     Sw(ctx, "js", true, "Enable JavaScript", "Turning this off breaks many sites")
+                    Sw(ctx, "landscape", true, "Play video in landscape mode when entering full screen")
+                    Pick(ctx, "dlbtn", "float", "Download button", listOf(Opt("float", "Floating button at bottom right"), Opt("bar", "Button in the toolbar")))
+                    Sw(ctx, "homefab", false, "Show floating button to go to the home screen quickly")
+                    Sw(ctx, "homefabl", false, "Show the home screen button on the left side")
+                    Sw(ctx, "skipedit", false, "Skip the download editor when a website starts a download", "The file is added and started at once")
                 }
                 "display" -> {
                     Pick(ctx, "dark", "theme", "Dark mode in browser", listOf(Opt("theme", "Based on theme"), Opt("on", "Always on"), Opt("off", "Always off")))
+                    Sw(ctx, "hidestatus", false, "Hide status bar while browsing")
+                    Sw(ctx, "full", false, "Full screen mode", "Hides the status bar and navigation bar; swipe from the edge to show them")
+                    Sw(ctx, "tabnum", false, "Show current tab number along with total tab count")
+                    Sw(ctx, "reflow", false, "Enable text reflow", "Makes small text bigger on wide pages")
                     Sw(ctx, "zoom", true, "Allow pinch zoom")
                     Sw(ctx, "wide", true, "Use wide viewport", "Recommended")
                     Sw(ctx, "overview", true, "Load pages in overview mode", "Recommended")
@@ -251,6 +275,8 @@ fun BrowserSettingsScreen(page: String, onPage: (String) -> Unit, onClose: () ->
                     Sw(ctx, "cookies", true, "Enable cookies", "Recommended")
                     Sw(ctx, "no3p", false, "Block 3rd party cookies")
                     Sw(ctx, "ssl", false, "Ignore SSL errors on websites and continue browsing", "Not safe: only for sites you trust")
+                    Sw(ctx, "dnt", false, "Request 'Do Not Track'", "Added to addresses you type or open from the start page")
+                    Sw(ctx, "savedata", false, "Request 'Save-Data'", "Added to addresses you type or open from the start page")
                     Sw(ctx, "xcache", false, "Clear cache on exit")
                     Sw(ctx, "xhist", false, "Clear history on exit")
                     Sw(ctx, "xcookie", false, "Clear cookies on exit")
@@ -260,10 +286,16 @@ fun BrowserSettingsScreen(page: String, onPage: (String) -> Unit, onClose: () ->
                 }
                 "perm" -> {
                     Sw(ctx, "newwin", true, "Allow sites to open new windows", "Pop-ups are still blocked while Ad block is on")
+                    Pick(ctx, "ext", "block", "Allow websites to open external apps", listOf(Opt("block", "Block"), Opt("allow", "Allow")))
                     BPrefs.version
                     Row2("Ad block", if (AdBlock.enabled) "On: blocks ads, trackers and pop-ups" else "Off", { AdBlock.set(ctx, !AdBlock.enabled); BPrefs.version++ }) {
                         Switch(checked = AdBlock.enabled, onCheckedChange = { AdBlock.set(ctx, it); BPrefs.version++ })
                     }
+                }
+                "acc" -> {
+                    Sw(ctx, "bottombar", false, "Move address bar to the bottom")
+                    Sw(ctx, "swipetab", true, "Swipe left or right on the address bar to switch tabs")
+                    Pick(ctx, "backact", "tab", "Back button when there is no earlier page", listOf(Opt("tab", "Close the tab (leave the browser if it is the last one)"), Opt("exit", "Leave the browser")))
                 }
                 "adv" -> {
                     Pick(ctx, "enc", "UTF-8", "Text encoding", listOf(Opt("UTF-8", "UTF-8"), Opt("ISO-8859-1", "ISO-8859-1"), Opt("windows-1252", "windows-1252"), Opt("Shift_JIS", "Shift_JIS"), Opt("GBK", "GBK")))

@@ -1,6 +1,7 @@
 # Changelog
 
 ## What's new
+- Browser settings now take effect (pages reload after you close Settings); more options: video full screen, address bar at the bottom, swipe tabs, quick buttons, full screen mode and more
 - Browser settings (three-dot menu > Settings): search engine, homepage, desktop site, dark mode, text size, cookies, clear data, ad block and more
 - Dark mode: text is visible again
 - Ad blocker: tapping a link no longer opens an ad instead
