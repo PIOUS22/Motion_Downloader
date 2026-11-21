@@ -1,6 +1,8 @@
 # Changelog
 
 ## What's new
+- Browser button is now at the top left of Home; the bottom bar hides while browsing
+- Browser menu: new "Return to home screen"; the back button also leaves the browser
 - New soft design: pastel cards, rounded shapes, new bottom bar and Home screen
 - YouTube links are analysed much faster, and the same link opens instantly the second time
 - Browser: website pop-ups at the bottom are no longer hidden by the bottom bar

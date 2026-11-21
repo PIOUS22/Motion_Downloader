@@ -306,7 +306,7 @@ private fun App(vm: MainViewModel) {
             modifier = Modifier.fillMaxSize().background(p.bg),
             containerColor = Color.Transparent,
             bottomBar = {
-                if (screen != "result") NavBar(screen, hist.count { it.status == "active" || it.status == "pending" }, browserOn) { screen = it }
+                if (screen != "result" && screen != "browser") NavBar(screen, hist.count { it.status == "active" || it.status == "pending" }, browserOn) { screen = it }
             },
         ) { pad ->
             androidx.compose.animation.Crossfade(targetState = screen, animationSpec = androidx.compose.animation.core.tween(220), label = "screen") { sc ->
@@ -319,14 +319,14 @@ private fun App(vm: MainViewModel) {
                         screen = "downloads"
                     } else screen = lastScreen
                 }
-                "browser" -> BrowserScreen(pad, browser) { link ->
+                "browser" -> BrowserScreen(pad, browser, onHome = { screen = "home" }) { link ->
                     Toast.makeText(ctx, "Analyzing link\u2026", Toast.LENGTH_SHORT).show()
                     vm.setUrl(Urls.normalize(link))
                     vm.analyze()
                 }
                 "downloads" -> DownloadsScreen(pad, hist, dlFilter) { dlFilter = it }
                 "settings" -> SettingsScreen(pad, vm, s)
-                else -> HomeScreen(pad, vm, s, hist) { screen = "downloads" }
+                else -> HomeScreen(pad, vm, s, hist, browserOn, onBrowser = { screen = "browser" }) { screen = "downloads" }
             }
             }
         }
@@ -365,7 +365,6 @@ private fun NavBar(cur: String, running: Int, browserOn: Boolean, onNav: (String
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             NavItem("Home", Ic.Home, cur == "home") { onNav("home") }
-            if (browserOn) NavItem("Browser", Ic.Globe, cur == "browser") { onNav("browser") }
             NavItem("Downloads", Ic.Download, cur == "downloads", if (running > 0) running.toString() else null) { onNav("downloads") }
             NavItem("Settings", Ic.Settings, cur == "settings") { onNav("settings") }
         }
@@ -419,7 +418,9 @@ private fun androidx.compose.foundation.layout.RowScope.NavItem(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: List<DlItem>, onSeeAll: () -> Unit) {
+private fun HomeScreen(
+    pad: PaddingValues, vm: MainViewModel, s: UiState, hist: List<DlItem>, browserOn: Boolean, onBrowser: () -> Unit, onSeeAll: () -> Unit,
+) {
     val p = LocalPal.current
     val ctx = LocalContext.current
     Column(Modifier.fillMaxSize().padding(pad).imePadding()) {
@@ -428,11 +429,15 @@ private fun HomeScreen(pad: PaddingValues, vm: MainViewModel, s: UiState, hist: 
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(46.dp).clip(CircleShape).background(p.surface), contentAlignment = Alignment.Center) { Logo(20.dp) }
+            if (browserOn) Box(
+                Modifier.size(46.dp).clip(CircleShape).background(p.surface).clickable(role = Role.Button, onClick = onBrowser),
+                contentAlignment = Alignment.Center,
+            ) { Ico(Ic.Globe, 22.dp, p.text) }
             Column(Modifier.weight(1f)) {
                 Text("Hello!", fontSize = 12.sp, color = p.muted)
                 Text("Motion Downloader", fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
+            Box(Modifier.size(46.dp).clip(CircleShape).background(p.surface), contentAlignment = Alignment.Center) { Logo(20.dp) }
         }
         Text("Download any\nvideo, fast", fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold)
 

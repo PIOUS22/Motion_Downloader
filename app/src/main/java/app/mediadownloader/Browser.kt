@@ -274,7 +274,7 @@ private val SHORTCUTS = listOf(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String) -> Unit) {
+fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDownloadPage: (String) -> Unit) {
     val p = LocalPal.current
     val focus = LocalFocusManager.current
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -319,6 +319,12 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                 putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             })
         }.onFailure { Toast.makeText(ctx, "Voice search is not available", Toast.LENGTH_SHORT).show() }
+    }
+    androidx.activity.compose.BackHandler(enabled = !addr) {
+        if (b.showTabs) b.showTabs = false
+        else if (b.showHistory) b.showHistory = false
+        else if (tab.started && tab.web.canGoBack()) tab.web.goBack()
+        else onHome()
     }
     androidx.activity.compose.BackHandler(enabled = addr) { addr = false; focus.clearFocus() }
     LaunchedEffect(addr) { if (addr) runCatching { addrFocus.requestFocus() } }
@@ -490,7 +496,8 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onDownloadPage: (String)
                             contentAlignment = Alignment.Center,
                         ) { Ico(Ic.MoreV, 20.dp, ink) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("New tab") }, onClick = { menu = false; b.addTab() })
+                            DropdownMenuItem(text = { Text("Return to home screen") }, onClick = { menu = false; onHome() })
+                        DropdownMenuItem(text = { Text("New tab") }, onClick = { menu = false; b.addTab() })
                             DropdownMenuItem(text = { Text("Reload") }, onClick = { menu = false; if (tab.started) tab.web.reload() })
                             DropdownMenuItem(text = { Text("Copy link") }, enabled = tab.isPage(), onClick = {
                                 menu = false
