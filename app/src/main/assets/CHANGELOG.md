@@ -1,6 +1,7 @@
 # Changelog
 
 ## What's new
+- Browser settings (three-dot menu > Settings): search engine, homepage, desktop site, dark mode, text size, cookies, clear data, ad block and more
 - Dark mode: text is visible again
 - Ad blocker: tapping a link no longer opens an ad instead
 - Browser: ad blocker (ads, trackers and pop-ups); switch it on or off in the three-dot menu

@@ -134,6 +134,7 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
     init {
         BrowserHistory.init(ctx)
         AdBlock.load(ctx)
+        BPrefs.apply(ctx, web, false)
         web.settings.setSupportMultipleWindows(true)
         web.addJavascriptInterface(Bridge(), "MDBridge")
         web.webViewClient = object : WebViewClient() {
@@ -160,6 +161,10 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
                 sync(view)
             }
 
+            override fun onReceivedSslError(view: WebView?, handler: android.webkit.SslErrorHandler?, error: android.net.http.SslError?) {
+                if (BPrefs.bool(ctx, "ssl", false)) handler?.proceed() else handler?.cancel()
+            }
+
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): android.webkit.WebResourceResponse? {
                 val r = request ?: return null
                 if (AdBlock.enabled && !r.isForMainFrame && AdBlock.blocked(r.url)) {
@@ -184,7 +189,7 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
 
             // pop-ups: blocked unless you tapped something; an allowed one opens in this same tab
             override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message?): Boolean {
-                if (AdBlock.enabled) return false          // ads open pop-ups from your taps; real links open in this tab
+                if (AdBlock.enabled || !BPrefs.newWindows(ctx)) return false          // ads open pop-ups from your taps; real links open in this tab
                 val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
                 val tmp = WebView(ctx)
                 tmp.webViewClient = object : WebViewClient() {
@@ -221,10 +226,16 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
         val target = when {
             t.startsWith("http://") || t.startsWith("https://") -> t
             t.contains('.') && !t.contains(' ') -> "https://$t"
-            else -> "https://www.google.com/search?q=" + Uri.encode(t)
+            else -> BPrefs.searchUrl(ctx, t)
         }
         started = true
         web.loadUrl(target)
+    }
+
+    /** Home button: the homepage from the settings, or the start page. */
+    fun goHome() {
+        val h = BPrefs.homepage(ctx)
+        if (h.isNotBlank()) go(h) else showStartPage()
     }
 
     fun showStartPage() {
@@ -248,6 +259,8 @@ class BrowserHolder(private val ctx: Context) {
     var index by mutableIntStateOf(0)
     var showTabs by mutableStateOf(false)
     var showHistory by mutableStateOf(false)
+    var showSettings by mutableStateOf(false)
+    var settingsPage by mutableStateOf("")
 
     private fun makeTab() = BrowserTab(ctx) { offer = it }
 
@@ -282,7 +295,19 @@ class BrowserHolder(private val ctx: Context) {
         index = index.coerceIn(0, tabs.lastIndex)
     }
 
+    fun applySettings(appDark: Boolean) {
+        tabs.forEach { t ->
+            BPrefs.apply(ctx, t.web, appDark)
+            t.swipe.isEnabled = !BPrefs.bool(ctx, "norefresh", false)
+        }
+    }
+
+    fun clearCache() { tabs.forEach { BPrefs.clearCache(ctx, it.web) } }
+
     fun destroyAll() {
+        if (BPrefs.bool(ctx, "xcache", false)) clearCache()
+        if (BPrefs.bool(ctx, "xcookie", false)) BPrefs.clearCookies()
+        if (BPrefs.bool(ctx, "xhist", false)) BrowserHistory.clear()
         tabs.forEach { it.destroy() }
     }
 }
@@ -314,8 +339,10 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
     var editing by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     LaunchedEffect(tab.id, tab.url) { if (!editing) field = tab.url }
+    BPrefs.version
+    LaunchedEffect(BPrefs.version, p.dark, b.tabs.size) { b.applySettings(p.dark) }
     LaunchedEffect(tab.id) { tab.web.onResume() }
-    DisposableEffect(tab.id) { onDispose { runCatching { tab.web.onPause() } } }
+    DisposableEffect(tab.id) { onDispose { if (BPrefs.pauseTimers(ctx)) runCatching { tab.web.onPause() } } }
     // Is a video open on this page? (checked every 1.5 s because many sites change pages without reloading)
     LaunchedEffect(tab.id, tab.started) {
         while (tab.started) {
@@ -352,7 +379,8 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
         }.onFailure { Toast.makeText(ctx, "Voice search is not available", Toast.LENGTH_SHORT).show() }
     }
     androidx.activity.compose.BackHandler(enabled = !addr) {
-        if (b.showTabs) b.showTabs = false
+        if (b.showSettings) { if (b.settingsPage.isNotEmpty()) b.settingsPage = "" else b.showSettings = false }
+        else if (b.showTabs) b.showTabs = false
         else if (b.showHistory) b.showHistory = false
         else if (tab.started && tab.web.canGoBack()) tab.web.goBack()
         else onHome()
@@ -371,7 +399,12 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                 }
             }
             Box(Modifier.weight(1f).fillMaxWidth().padding(bottom = pad.calculateBottomPadding())) {
-                if (b.showTabs) {
+                if (b.showSettings) {
+                    BrowserSettingsScreen(
+                        page = b.settingsPage, onPage = { b.settingsPage = it }, onClose = { b.showSettings = false },
+                        onClearCache = { b.clearCache() }, onClearHistory = { BrowserHistory.clear() },
+                    )
+                } else if (b.showTabs) {
                     TabList(b)
                 } else if (b.showHistory) {
                     HistoryList(onOpen = { u -> b.showHistory = false; tab.go(u) }, onClose = { b.showHistory = false })
@@ -489,7 +522,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                 ) {
                     Box(
                         Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) {
-                            b.showTabs = false; b.showHistory = false; tab.showStartPage(); field = ""
+                            b.showTabs = false; b.showHistory = false; b.showSettings = false; tab.goHome(); field = ""
                         },
                         contentAlignment = Alignment.Center,
                     ) { Ico(Ic.Home, 22.dp, ink) }
@@ -517,7 +550,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                         Ico(Ic.Search, 18.dp, dim)
                     }
                     Box(
-                        Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) { b.showHistory = false; b.showTabs = !b.showTabs },
+                        Modifier.size(34.dp).clip(CircleShape).clickable(role = Role.Button) { b.showHistory = false; b.showSettings = false; b.showTabs = !b.showTabs },
                         contentAlignment = Alignment.Center,
                     ) { Text(b.tabs.size.toString(), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = if (b.showTabs) p.primary else ink) }
                     Box(Modifier.width(1.5.dp).height(22.dp).background(ink.copy(alpha = 0.5f)))
@@ -531,6 +564,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                             menu = false; AdBlock.set(ctx, !AdBlock.enabled); if (tab.started) tab.web.reload()
                             Toast.makeText(ctx, if (AdBlock.enabled) "Ad block on" else "Ad block off", Toast.LENGTH_SHORT).show()
                         })
+                        DropdownMenuItem(text = { Text("Settings") }, leadingIcon = { Ico(Ic.Settings, 18.dp) }, onClick = { menu = false; b.showTabs = false; b.showHistory = false; b.settingsPage = ""; b.showSettings = true })
                         DropdownMenuItem(text = { Text("Return to home screen") }, onClick = { menu = false; onHome() })
                         DropdownMenuItem(text = { Text("New tab") }, onClick = { menu = false; b.addTab() })
                             DropdownMenuItem(text = { Text("Reload") }, onClick = { menu = false; if (tab.started) tab.web.reload() })
@@ -541,7 +575,7 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                                 Toast.makeText(ctx, "Link copied", Toast.LENGTH_SHORT).show()
                             })
                             DropdownMenuItem(text = { Text("History") }, onClick = { menu = false; b.showTabs = false; b.showHistory = true })
-                            DropdownMenuItem(text = { Text("Start page") }, onClick = { menu = false; b.showHistory = false; tab.showStartPage(); field = "" })
+                            DropdownMenuItem(text = { Text("Start page") }, onClick = { menu = false; b.showHistory = false; b.showSettings = false; tab.goHome(); field = "" })
                             DropdownMenuItem(text = { Text("Close tab") }, onClick = { menu = false; b.closeTab(b.index) })
                         }
                     }
