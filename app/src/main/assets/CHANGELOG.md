@@ -1,6 +1,7 @@
 # Changelog
 
 ## What's new
+- Browser: ad blocker (ads, trackers and pop-ups); switch it on or off in the three-dot menu
 - Browser button is now at the top left of Home; the bottom bar hides while browsing
 - Browser menu: new "Return to home screen"; the back button also leaves the browser
 - New soft design: pastel cards, rounded shapes, new bottom bar and Home screen

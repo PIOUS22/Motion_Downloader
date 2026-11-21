@@ -133,6 +133,8 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
 
     init {
         BrowserHistory.init(ctx)
+        AdBlock.load(ctx)
+        web.settings.setSupportMultipleWindows(true)
         web.addJavascriptInterface(Bridge(), "MDBridge")
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, pageUrl: String?, favicon: Bitmap?) {
@@ -147,6 +149,7 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
                 title = view?.title ?: title
                 swipe.isRefreshing = false
                 view?.evaluateJavascript(trackScroll, null)
+                if (AdBlock.enabled) view?.evaluateJavascript(AdBlock.HIDE_JS, null)
                 BrowserHistory.add(pageUrl, view?.title)
                 sync(view)
             }
@@ -156,8 +159,17 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
                 sync(view)
             }
 
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): android.webkit.WebResourceResponse? {
+                val r = request ?: return null
+                if (AdBlock.enabled && !r.isForMainFrame && AdBlock.blocked(r.url)) {
+                    return android.webkit.WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
+                }
+                return null
+            }
+
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val u = request?.url ?: return false
+                if (AdBlock.enabled && AdBlock.blocked(u)) return true      // redirect to an ad site
                 if (u.scheme == "http" || u.scheme == "https") return false
                 // app links (intent:, fb:, ...) are not opened: stay in the browser
                 return true
@@ -167,6 +179,24 @@ class BrowserTab(private val ctx: Context, private val onOffer: (FileOffer) -> U
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 progress = newProgress
                 if (newProgress >= 100) swipe.isRefreshing = false
+            }
+
+            // pop-ups: blocked unless you tapped something; an allowed one opens in this same tab
+            override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message?): Boolean {
+                if (AdBlock.enabled && !isUserGesture) return false
+                val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+                val tmp = WebView(ctx)
+                tmp.webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?): Boolean {
+                        val u = r?.url
+                        if (u != null && !(AdBlock.enabled && AdBlock.blocked(u)) && (u.scheme == "http" || u.scheme == "https")) web.loadUrl(u.toString())
+                        v?.post { runCatching { v.destroy() } }
+                        return true
+                    }
+                }
+                transport.webView = tmp
+                resultMsg.sendToTarget()
+                return true
             }
 
             override fun onReceivedTitle(view: WebView?, t: String?) {
@@ -496,7 +526,11 @@ fun BrowserScreen(pad: PaddingValues, b: BrowserHolder, onHome: () -> Unit, onDo
                             contentAlignment = Alignment.Center,
                         ) { Ico(Ic.MoreV, 20.dp, ink) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("Return to home screen") }, onClick = { menu = false; onHome() })
+                            DropdownMenuItem(text = { Text(if (AdBlock.enabled) "Ad block: ON" else "Ad block: OFF") }, onClick = {
+                            menu = false; AdBlock.set(ctx, !AdBlock.enabled); if (tab.started) tab.web.reload()
+                            Toast.makeText(ctx, if (AdBlock.enabled) "Ad block on" else "Ad block off", Toast.LENGTH_SHORT).show()
+                        })
+                        DropdownMenuItem(text = { Text("Return to home screen") }, onClick = { menu = false; onHome() })
                         DropdownMenuItem(text = { Text("New tab") }, onClick = { menu = false; b.addTab() })
                             DropdownMenuItem(text = { Text("Reload") }, onClick = { menu = false; if (tab.started) tab.web.reload() })
                             DropdownMenuItem(text = { Text("Copy link") }, enabled = tab.isPage(), onClick = {
